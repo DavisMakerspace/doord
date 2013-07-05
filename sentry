@@ -16,21 +16,21 @@ init)
   chown sentry:sentry $gpio_unlock/value
   chmod g+w $gpio_unlock/value
   ln -sf $gpio_unlock/value $RUNDIR/unlock
-  echo "sentry initialized" 1>&2
+  echo "initialized" 1>&2
   ;;
 uninit)
   rm $RUNDIR/*
   echo $GPIO_UNLOCK > $gpio/unexport
-  echo "sentry uninitialized" 1>&2
+  echo "uninitialized" 1>&2
   ;;
 unlock)
   reset() {
-    echo "done" 1>&2
     echo 0 > $RUNDIR/unlock
+    echo "reset unlock signal" 1>&2
   }
   trap reset EXIT
-  echo -n "sending unlock signal... " 1>&2
   echo 1 > $RUNDIR/unlock
+  echo "set unlock signal" 1>&2
   sleep 1
   ;;
 *)
