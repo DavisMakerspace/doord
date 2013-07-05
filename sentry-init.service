@@ -1,0 +1,11 @@
+[Unit]
+Description=sentry initialize
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/sentry init
+ExecStop=/usr/bin/sentry uninit
+
+[Install]
+WantedBy=multi-user.target
