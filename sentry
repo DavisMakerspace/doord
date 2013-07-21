@@ -2,15 +2,16 @@
 
 RUNDIR=/run/sentry
 
-GPIO_UNLOCK=30
 GPIO_LOCK=31
+GPIO_UNLOCK=30
 
-GPIO_UNLOCKED=60
 GPIO_LOCKED=48
-GPIO_CLOSED=51
+GPIO_UNLOCKED=60
+GPIO_DOOR=51
 
 ###
 
+cmd=$1
 gpio=/sys/class/gpio
 
 gpio_export() {
@@ -23,18 +24,18 @@ gpio_export() {
   ln -sf $gpio/gpio$id/value $RUNDIR/$name
 }
 
-case $1 in
+case $cmd in
 init)
-  gpio_export $GPIO_UNLOCK low unlock
   gpio_export $GPIO_LOCK low lock
-  gpio_export $GPIO_UNLOCKED in unlocked
+  gpio_export $GPIO_UNLOCK low unlock
   gpio_export $GPIO_LOCKED in locked
-  gpio_export $GPIO_CLOSED in closed
+  gpio_export $GPIO_UNLOCKED in unlocked
+  gpio_export $GPIO_DOOR in door
   echo "initialized" 1>&2
   ;;
 uninit)
   rm $RUNDIR/*
-  for id in $GPIO_UNLOCK $GPIO_LOCK $GPIO_UNLOCKED $GPIO_LOCKED $GPIO_CLOSED; do
+  for id in $GPIO_UNLOCK $GPIO_LOCK $GPIO_UNLOCKED $GPIO_LOCKED $GPIO_DOOR; do
     echo $id > $gpio/unexport
   done
   echo "uninitialized" 1>&2
@@ -59,12 +60,18 @@ unlock)
   echo "set unlock signal" 1>&2
   sleep 1
   ;;
+locked|unlocked|door)
+  cat $RUNDIR/$cmd
+  ;;
 *)
   echo "usage: $(basename $0) <command>" 1>&2
-  echo "  init    Initialize sentry functionality (must be root)" 1>&2
-  echo "  uninit  Uninitialize sentry functionality (must be root)" 1>&2
-  echo "  lock    Lock the deadbolt" 1>&2
-  echo "  unlock  Unlock the deadbolt" 1>&2
+  echo "  init     Initialize sentry functionality (must be root)" 1>&2
+  echo "  uninit   Uninitialize sentry functionality (must be root)" 1>&2
+  echo "  lock     Lock the deadbolt" 1>&2
+  echo "  unlock   Unlock the deadbolt" 1>&2
+  echo "  locked   Is the deadbolt locked? (0|1)" 1>&2
+  echo "  unlocked Is the deadbolt unlocked? (0|1)" 1>&2
+  echo "  door     Is the door open? (0|1)" 1>&2
   exit 2;
   ;;
 esac
