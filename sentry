@@ -13,7 +13,7 @@ GPIO_CLOSED=51
 
 gpio=/sys/class/gpio
 
-export() {
+gpio_export() {
   id=$1; direction=$2; name=$3
   echo $id > $gpio/export
   echo $direction > $gpio/gpio$id/direction
@@ -25,13 +25,29 @@ export() {
 
 case $1 in
 init)
-  export $GPIO_UNLOCK low unlock
+  gpio_export $GPIO_UNLOCK low unlock
+  gpio_export $GPIO_LOCK low lock
+  gpio_export $GPIO_UNLOCKED in unlocked
+  gpio_export $GPIO_LOCKED in locked
+  gpio_export $GPIO_CLOSED in closed
   echo "initialized" 1>&2
   ;;
 uninit)
   rm $RUNDIR/*
-  echo $GPIO_UNLOCK > $gpio/unexport
+  for id in $GPIO_UNLOCK $GPIO_LOCK $GPIO_UNLOCKED $GPIO_LOCKED $GPIO_CLOSED; do
+    echo $id > $gpio/unexport
+  done
   echo "uninitialized" 1>&2
+  ;;
+lock)
+  reset() {
+    echo 0 > $RUNDIR/lock
+    echo "reset lock signal" 1>&2
+  }
+  trap reset EXIT
+  echo 1 > $RUNDIR/lock
+  echo "set lock signal" 1>&2
+  sleep 1
   ;;
 unlock)
   reset() {
@@ -47,6 +63,7 @@ unlock)
   echo "usage: $(basename $0) <command>" 1>&2
   echo "  init    Initialize sentry functionality (must be root)" 1>&2
   echo "  uninit  Uninitialize sentry functionality (must be root)" 1>&2
+  echo "  lock    Lock the deadbolt" 1>&2
   echo "  unlock  Unlock the deadbolt" 1>&2
   exit 2;
   ;;
