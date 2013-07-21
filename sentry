@@ -1,21 +1,31 @@
 #!/bin/bash -e
 
 RUNDIR=/run/sentry
+
 GPIO_UNLOCK=30
+GPIO_LOCK=31
+
+GPIO_UNLOCKED=60
+GPIO_LOCKED=48
+GPIO_CLOSED=51
 
 ###
 
 gpio=/sys/class/gpio
-gpio_unlock=$gpio/gpio$GPIO_UNLOCK
+
+export() {
+  id=$1; direction=$2; name=$3
+  echo $id > $gpio/export
+  echo $direction > $gpio/gpio$id/direction
+  mkdir -p $RUNDIR
+  chown sentry:sentry $gpio/gpio$id/value
+  chmod g+w $gpio/gpio$id/value
+  ln -sf $gpio/gpio$id/value $RUNDIR/$name
+}
 
 case $1 in
 init)
-  echo $GPIO_UNLOCK > $gpio/export
-  echo low > $gpio_unlock/direction
-  mkdir -p $RUNDIR
-  chown sentry:sentry $gpio_unlock/value
-  chmod g+w $gpio_unlock/value
-  ln -sf $gpio_unlock/value $RUNDIR/unlock
+  export $GPIO_UNLOCK low unlock
   echo "initialized" 1>&2
   ;;
 uninit)
