@@ -24,6 +24,18 @@ gpio_export() {
   ln -sf $gpio/gpio$id/value $RUNDIR/$name
 }
 
+gpio_trigger() {
+  name=$1
+  reset() {
+    echo 0 > $RUNDIR/$name
+    echo "reset $name signal" 1>&2
+  }
+  trap reset EXIT
+  echo 1 > $RUNDIR/$name
+  echo "set $name signal" 1>&2
+  sleep 1
+}
+
 case $cmd in
 init)
   gpio_export $GPIO_LOCK low lock
@@ -40,25 +52,8 @@ uninit)
   done
   echo "uninitialized" 1>&2
   ;;
-lock)
-  reset() {
-    echo 0 > $RUNDIR/lock
-    echo "reset lock signal" 1>&2
-  }
-  trap reset EXIT
-  echo 1 > $RUNDIR/lock
-  echo "set lock signal" 1>&2
-  sleep 1
-  ;;
-unlock)
-  reset() {
-    echo 0 > $RUNDIR/unlock
-    echo "reset unlock signal" 1>&2
-  }
-  trap reset EXIT
-  echo 1 > $RUNDIR/unlock
-  echo "set unlock signal" 1>&2
-  sleep 1
+lock|unlock)
+  gpio_trigger $cmd
   ;;
 locked|unlocked|door)
   cat $RUNDIR/$cmd
