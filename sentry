@@ -19,6 +19,7 @@ GPIO_INFO = {
   :door => {:id => GPIO_DOOR, :direction => :in}
 }
 cmd = ARGV.shift
+cmd = cmd.to_sym if cmd
 
 def value_path(name)
   return "#{GPIO}/gpio#{GPIO_INFO[name][:id]}/value"
@@ -43,7 +44,7 @@ def gpio_trigger(name)
 end
 
 case cmd
-when "init"
+when :init
   GPIO_INFO.each do |name, info|
     File.write("#{GPIO}/export", info[:id])
     File.write("#{GPIO}/gpio#{info[:id]}/direction", info[:direction])
@@ -56,15 +57,15 @@ when "init"
     end
   end
   STDERR.puts "initialized"
-when "uninit"
+when :uninit
   GPIO_INFO.each do |name, info|
     File.write("#{GPIO}/unexport", info[:id])
   end
   STDERR.puts "uninitialized"
-when "lock", "unlock"
-  gpio_trigger cmd.to_sym
-when "locked", "unlocked", "door"
-  puts File.read(value_path(cmd.to_sym))
+when :lock, :unlock
+  gpio_trigger cmd
+when :locked, :unlocked, :door
+  puts File.read(value_path(cmd))
 else
   STDERR.puts "usage: #{File.basename $0} <command>"
   STDERR.puts "  init     Initialize sentry functionality (must be root)"
