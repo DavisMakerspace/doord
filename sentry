@@ -1,72 +1,78 @@
-#!/bin/bash -e
+#!/usr/bin/env ruby
 
-RUNDIR=/run/sentry
+GPIO_LOCK = 31
+GPIO_UNLOCK = 30
 
-GPIO_LOCK=31
-GPIO_UNLOCK=30
-
-GPIO_LOCKED=48
-GPIO_UNLOCKED=60
-GPIO_DOOR=51
+GPIO_LOCKED = 48
+GPIO_UNLOCKED = 60
+GPIO_DOOR = 51
 
 ###
+require 'etc'
 
-cmd=$1
-gpio=/sys/class/gpio
-
-gpio_export() {
-  id=$1; direction=$2; name=$3
-  echo $id > $gpio/export
-  echo $direction > $gpio/gpio$id/direction
-  mkdir -p $RUNDIR
-  chown sentry:sentry $gpio/gpio$id/value
-  chmod g+w $gpio/gpio$id/value
-  ln -sf $gpio/gpio$id/value $RUNDIR/$name
+GPIO = "/sys/class/gpio"
+GPIO_INFO = {
+  :lock => {:id => GPIO_LOCK, :direction => :low},
+  :unlock => {:id => GPIO_UNLOCK, :direction => :low},
+  :locked => {:id => GPIO_LOCKED, :direction => :in},
+  :unlocked => {:id => GPIO_UNLOCKED, :direction => :in},
+  :door => {:id => GPIO_DOOR, :direction => :in}
 }
+cmd = ARGV.shift
 
-gpio_trigger() {
-  name=$1
-  reset() {
-    echo 0 > $RUNDIR/$name
-    echo "reset $name signal" 1>&2
-  }
-  trap reset EXIT
-  echo 1 > $RUNDIR/$name
-  echo "set $name signal" 1>&2
+def value_path(name)
+  return "#{GPIO}/gpio#{GPIO_INFO[name][:id]}/value"
+end
+
+def gpio_set(name)
+  File.write(value_path(name), "1")
+  STDERR.puts "set #{name} signal"
+end
+
+def gpio_reset(name)
+  File.write(value_path(name), "0")
+  STDERR.puts "reset #{name} signal"
+end
+
+def gpio_trigger(name)
+  default = trap(:EXIT) { gpio_reset(name) }
+  gpio_set(name)
   sleep 1
-}
+  trap(:EXIT, default)
+  gpio_reset(name)
+end
 
-case $cmd in
-init)
-  gpio_export $GPIO_LOCK low lock
-  gpio_export $GPIO_UNLOCK low unlock
-  gpio_export $GPIO_LOCKED in locked
-  gpio_export $GPIO_UNLOCKED in unlocked
-  gpio_export $GPIO_DOOR in door
-  echo "initialized" 1>&2
-  ;;
-uninit)
-  rm $RUNDIR/*
-  for id in $GPIO_UNLOCK $GPIO_LOCK $GPIO_UNLOCKED $GPIO_LOCKED $GPIO_DOOR; do
-    echo $id > $gpio/unexport
-  done
-  echo "uninitialized" 1>&2
-  ;;
-lock|unlock)
-  gpio_trigger $cmd
-  ;;
-locked|unlocked|door)
-  cat $RUNDIR/$cmd
-  ;;
-*)
-  echo "usage: $(basename $0) <command>" 1>&2
-  echo "  init     Initialize sentry functionality (must be root)" 1>&2
-  echo "  uninit   Uninitialize sentry functionality (must be root)" 1>&2
-  echo "  lock     Lock the deadbolt" 1>&2
-  echo "  unlock   Unlock the deadbolt" 1>&2
-  echo "  locked   Is the deadbolt locked? (0|1)" 1>&2
-  echo "  unlocked Is the deadbolt unlocked? (0|1)" 1>&2
-  echo "  door     Is the door open? (0|1)" 1>&2
-  exit 2;
-  ;;
-esac
+case cmd
+when "init"
+  GPIO_INFO.each do |name, info|
+    File.write("#{GPIO}/export", info[:id])
+    File.write("#{GPIO}/gpio#{info[:id]}/direction", info[:direction])
+    value_file = File.new(value_path(name))
+    value_file.chown(Etc.getpwnam("sentry").uid, Etc.getgrnam("sentry").gid)
+    if info[:direction] == :in
+      value_file.chmod(0440)
+    else
+      value_file.chmod(0660)
+    end
+  end
+  STDERR.puts "initialized"
+when "uninit"
+  GPIO_INFO.each do |name, info|
+    File.write("#{GPIO}/unexport", info[:id])
+  end
+  STDERR.puts "uninitialized"
+when "lock", "unlock"
+  gpio_trigger cmd.to_sym
+when "locked", "unlocked", "door"
+  puts File.read(value_path(cmd.to_sym))
+else
+  STDERR.puts "usage: #{File.basename $0} <command>"
+  STDERR.puts "  init     Initialize sentry functionality (must be root)"
+  STDERR.puts "  uninit   Uninitialize sentry functionality (must be root)"
+  STDERR.puts "  lock     Lock the deadbolt"
+  STDERR.puts "  unlock   Unlock the deadbolt"
+  STDERR.puts "  locked   Is the deadbolt locked? (0|1)"
+  STDERR.puts "  unlocked Is the deadbolt unlocked? (0|1)"
+  STDERR.puts "  door     Is the door open? (0|1)"
+  exit 2
+end
