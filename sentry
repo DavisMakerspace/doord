@@ -77,13 +77,13 @@ when :watch
     ready.each do |file|
       case file
       when locked
-        puts "SIGNAL locked   = #{locked.read(1)}"
+        puts "#{Time.now}  locked   = #{locked.read(1)}"
         locked.rewind
       when unlocked
-        puts "SIGNAL unlocked = #{unlocked.read(1)}"
+        puts "#{Time.now}  unlocked = #{unlocked.read(1)}"
         unlocked.rewind
       when door
-        puts "SIGNAL door     = #{door.read(1)}"
+        puts "#{Time.now}  door     = #{door.read(1)}"
         door.rewind
       end
     end
