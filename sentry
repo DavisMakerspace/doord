@@ -8,7 +8,6 @@ GPIO_UNLOCKED = 60
 GPIO_DOOR = 51
 
 ###
-require 'etc'
 
 GPIO = "/sys/class/gpio"
 GPIO_INFO = {
@@ -49,7 +48,7 @@ when :init
     File.write("#{GPIO}/export", info[:id])
     File.write(gpio_path(:direction, name), info[:direction])
     value_file = File.new(gpio_path(:value, name))
-    value_file.chown(Etc.getpwnam("sentry").uid, Etc.getgrnam("sentry").gid)
+    value_file.chown(Process::UID.from_name("sentry"), Process::GID.from_name("sentry"))
     if info[:direction] == :in
       value_file.chmod(0440)
       File.write(gpio_path(:edge, name), "both")
