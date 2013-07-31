@@ -1,0 +1,39 @@
+#!/usr/bin/env ruby
+
+$DEBUG = true
+
+###
+require 'logger'
+require 'socket'
+require 'json'
+
+LOG = Logger.new(STDERR)
+LOG.level = $DEBUG ? Logger::DEBUG : Logger::INFO
+
+$sockets = []
+$mutex = Mutex.new
+
+def do_server()
+  server = UNIXServer.new("sentry.socket")
+  while socket = server.accept
+    LOG.info { "New connection #{socket}" }
+    Thread.new do
+      $mutex.synchronize { $sockets << socket }
+      socket.each do |line|
+        line.strip!
+        LOG.info { "Received client message: #{line.dump}" }
+        begin
+          cmd = JSON::parse(line, {:symbolize_names => true})
+        rescue JSON::ParserError => error
+          LOG.error { "Client message resulted in JSON parse error #{error}" }
+          cmd = {}
+        end
+        LOG.info { "Client command: #{cmd}" }
+      end
+      $mutex.synchronize { $sockets.delete socket }
+      LOG.info { "Disconnected #{socket}" }
+    end
+  end
+end
+
+do_server
