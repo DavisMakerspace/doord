@@ -102,6 +102,10 @@ class GPIO
   def clear()
     self.value = "0"
   end
+  def poll(timeout = nil)
+    r,w,ready = IO.select(nil, nil, [value_file], timeout)
+    return value
+  end
   attr_reader :value_file
 end
 
@@ -115,6 +119,13 @@ DOOR_GPIO = {
 
 cmd = ARGV.shift
 cmd = cmd.to_sym if cmd
+
+def watch(label, gpio)
+  while true
+    value = gpio.poll
+    puts "#{Time.now} #{label} = #{value}"
+  end
+end
 
 case cmd
 when :init
@@ -144,23 +155,11 @@ when :lock, :unlock
 when :locked, :unlocked, :door
   puts DOOR_GPIO[cmd].value
 when :watch
-  locked = DOOR_GPIO[:locked].value_file
-  unlocked = DOOR_GPIO[:unlocked].value_file
-  door = DOOR_GPIO[:door].value_file
-  while true
-    r,w,ready = IO.select(nil, nil, [locked, unlocked, door])
-    break if ready.empty?
-    ready.each do |file|
-      case file
-      when locked
-        puts "#{Time.now}  locked   = #{DOOR_GPIO[:locked].value}"
-      when unlocked
-        puts "#{Time.now}  unlocked = #{DOOR_GPIO[:unlocked].value}"
-      when door
-        puts "#{Time.now}  door     = #{DOOR_GPIO[:door].value}"
-      end
-    end
-  end
+  threads = []
+  threads << Thread.new { watch("locked  ", DOOR_GPIO[:locked]) }
+  threads << Thread.new { watch("unlocked", DOOR_GPIO[:unlocked]) }
+  threads << Thread.new { watch("door    ", DOOR_GPIO[:door]) }
+  threads.each { |thr| thr.join }
 else
   STDERR.puts "usage: #{File.basename $0} <command>"
   STDERR.puts "  init     Initialize sentry functionality (must be root)"
