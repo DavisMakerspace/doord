@@ -1,89 +1,163 @@
 #!/usr/bin/env ruby
 
-GPIO_LOCK = 31
-GPIO_UNLOCK = 30
-
-GPIO_LOCKED = 48
-GPIO_UNLOCKED = 60
-GPIO_DOOR = 51
+module SentryConfig
+  module GPIO
+    LOCK = 31
+    UNLOCK = 30
+    LOCKED = 48
+    UNLOCKED = 60
+    DOOR = 51
+  end
+  module Daemon
+    UID = Process::UID.from_name("sentry")
+    GID = Process::GID.from_name("sentry")
+    INPUT_MODE = 0440
+    OUTPUT_MODE = 0660
+  end
+end
 
 ###
 
-GPIO = "/sys/class/gpio"
-GPIO_INFO = {
-  :lock => {:id => GPIO_LOCK, :direction => :low},
-  :unlock => {:id => GPIO_UNLOCK, :direction => :low},
-  :locked => {:id => GPIO_LOCKED, :direction => :in},
-  :unlocked => {:id => GPIO_UNLOCKED, :direction => :in},
-  :door => {:id => GPIO_DOOR, :direction => :in}
+class GPIOException < RuntimeError; end
+class GPIOSyntaxError < GPIOException; end
+class GPIOReadOnlyError < GPIOException; end
+class GPIONotExportedError < GPIOException; end
+
+class GPIO
+  GPIO_PATH = "/sys/class/gpio"
+  DIRECTIONS = [:in, :out, :high, :low]
+  EDGES = [:none, :rising, :falling, :both]
+  def initialize(id)
+    @id = id
+    attach
+  end
+  def path(file)
+    return "#{GPIO_PATH}/gpio#{@id}/#{file}"
+  end
+  def direction_path()
+    return path("direction")
+  end
+  def value_path()
+    return path("value")
+  end
+  def edge_path()
+    return path("edge")
+  end
+  def exported?()
+    return File.exists?(value_path)
+  end
+  def attach()
+    if exported?
+      if input?
+        @value_file = File.new(value_path, "r")
+      else
+        @value_file = File.new(value_path, "w")
+      end
+    else
+      @value_file = nil
+    end
+  end
+  def export()
+    File.write("#{GPIO_PATH}/export", @id)
+    attach
+  end
+  def unexport()
+    File.write("#{GPIO_PATH}/unexport", @id)
+    attach
+  end
+  def direction()
+    return File.read(direction_path).strip.to_sym
+  end
+  def input?()
+    return direction == :in
+  end
+  def output?()
+    return direction == :out
+  end
+  def direction=(d)
+    raise GPIOSyntaxError.new if !DIRECTIONS.include?(d)
+    File.write(direction_path, d)
+    attach()
+  end
+  def edge()
+    return File.read(edge_path).strip.to_sym
+  end
+  def edge=(e)
+    raise GPIOSyntaxError.new if !EDGES.include?(e)
+    File.write(edge_path, e)
+  end
+  def value()
+    v = @value_file.read(1)
+    @value_file.rewind()
+    return v == "0" ? false : true
+  end
+  def value=(v)
+    raise GPIOReadOnlyError.new() if input?
+    @value_file.write(v)
+    @value_file.rewind()
+  end
+  def set()
+    self.value = "1"
+  end
+  def clear()
+    self.value = "0"
+  end
+  attr_reader :value_file
+end
+
+DOOR_GPIO = {
+  lock: GPIO.new(SentryConfig::GPIO::LOCK),
+  unlock: GPIO.new(SentryConfig::GPIO::UNLOCK),
+  locked: GPIO.new(SentryConfig::GPIO::LOCKED),
+  unlocked: GPIO.new(SentryConfig::GPIO::UNLOCKED),
+  door: GPIO.new(SentryConfig::GPIO::DOOR)
 }
+
 cmd = ARGV.shift
 cmd = cmd.to_sym if cmd
 
-def gpio_path(file, name)
-  return "#{GPIO}/gpio#{GPIO_INFO[name][:id]}/#{file}"
-end
-
-def gpio_set(name)
-  File.write(gpio_path(:value, name), "1")
-  STDERR.puts "set #{name} signal"
-end
-
-def gpio_reset(name)
-  File.write(gpio_path(:value, name), "0")
-  STDERR.puts "reset #{name} signal"
-end
-
-def gpio_trigger(name)
-  default = trap(:EXIT) { gpio_reset(name) }
-  gpio_set(name)
-  sleep 1
-  trap(:EXIT, default)
-  gpio_reset(name)
-end
-
 case cmd
 when :init
-  GPIO_INFO.each do |name, info|
-    File.write("#{GPIO}/export", info[:id])
-    File.write(gpio_path(:direction, name), info[:direction])
-    value_file = File.new(gpio_path(:value, name))
-    value_file.chown(Process::UID.from_name("sentry"), Process::GID.from_name("sentry"))
-    if info[:direction] == :in
-      value_file.chmod(0440)
-      File.write(gpio_path(:edge, name), "both")
+  DOOR_GPIO.each do |name, gpio|
+    gpio.export()
+    if [:lock, :unlock].include?(name)
+      gpio.direction = :low
     else
-      value_file.chmod(0660)
+      gpio.direction = :in
     end
+    gpio.edge = :both
+    gpio.value_file.chown(SentryConfig::Daemon::UID, SentryConfig::Daemon::GID)
+    gpio.value_file.chmod(gpio.input? ? SentryConfig::Daemon::INPUT_MODE : SentryConfig::Daemon::OUTPUT_MODE)
   end
   STDERR.puts "initialized"
 when :uninit
-  GPIO_INFO.each do |name, info|
-    File.write("#{GPIO}/unexport", info[:id])
+  DOOR_GPIO.each do |name, gpio|
+    gpio.unexport()
   end
   STDERR.puts "uninitialized"
 when :lock, :unlock
-  gpio_trigger cmd
+  default = trap(:EXIT) { DOOR_GPIO[cmd].clear() }
+  DOOR_GPIO[cmd].set()
+  sleep 1
+  DOOR_GPIO[cmd].clear()
+  trap(:EXIT, default)
 when :locked, :unlocked, :door
-  puts File.read(gpio_path(:value, cmd))
+  puts DOOR_GPIO[cmd].value
 when :watch
-  locked = File.new(gpio_path(:value, :locked))
-  unlocked = File.new(gpio_path(:value, :unlocked))
-  door = File.new(gpio_path(:value, :door))
+  locked = DOOR_GPIO[:locked].value_file
+  unlocked = DOOR_GPIO[:unlocked].value_file
+  door = DOOR_GPIO[:door].value_file
   while true
     r,w,ready = IO.select(nil, nil, [locked, unlocked, door])
     break if ready.empty?
     ready.each do |file|
       case file
       when locked
-        puts "#{Time.now}  locked   = #{locked.read(1)}"
-        locked.rewind
+        puts "#{Time.now}  locked   = #{DOOR_GPIO[:locked].value}"
       when unlocked
-        puts "#{Time.now}  unlocked = #{unlocked.read(1)}"
-        unlocked.rewind
+        puts "#{Time.now}  unlocked = #{DOOR_GPIO[:unlocked].value}"
       when door
-        puts "#{Time.now}  door     = #{door.read(1)}"
-        door.rewind
+        puts "#{Time.now}  door     = #{DOOR_GPIO[:door].value}"
       end
     end
   end
@@ -93,9 +167,9 @@ else
   STDERR.puts "  uninit   Uninitialize sentry functionality (must be root)"
   STDERR.puts "  lock     Lock the deadbolt"
   STDERR.puts "  unlock   Unlock the deadbolt"
-  STDERR.puts "  locked   Is the deadbolt locked? (0|1)"
-  STDERR.puts "  unlocked Is the deadbolt unlocked? (0|1)"
-  STDERR.puts "  door     Is the door open? (0|1)"
+  STDERR.puts "  locked   Is the deadbolt locked?"
+  STDERR.puts "  unlocked Is the deadbolt unlocked?"
+  STDERR.puts "  door     Is the door open?"
   STDERR.puts "  watch    Watch status signals for lock, unlock, and door"
   exit 2
 end
