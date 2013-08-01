@@ -1,0 +1,13 @@
+module GPIO
+  LOCK = 31
+  UNLOCK = 30
+  LOCKED = 48
+  UNLOCKED = 60
+  DOOR = 51
+end
+module Daemon
+  UID = Process::UID.from_name("sentry")
+  GID = Process::GID.from_name("sentry")
+  INPUT_MODE = 0440
+  OUTPUT_MODE = 0660
+end
