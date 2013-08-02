@@ -73,9 +73,9 @@ class JSONServerKeyEntry
     return new(SecureRandom.uuid, description, groups)
   end
   def initialize(key, description, groups)
-    @key = key
-    @description = description
-    @groups = groups
+    @key = key.to_sym
+    @description = description.to_s
+    @groups = groups.map { |g| g.to_sym }
   end
   def <=>(key)
     return @key <=> key.key
