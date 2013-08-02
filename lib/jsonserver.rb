@@ -1,10 +1,13 @@
 require 'logger'
 require 'socket'
 require 'json'
+require 'yaml/store'
+require 'securerandom'
 
 class JSONServer
-  def initialize(server, log = Logger.new(STDERR))
+  def initialize(server, keys, log = Logger.new(STDERR))
     @server = server
+    @keys = keys
     @log = log
   end
   def accept()
@@ -18,6 +21,7 @@ class JSONClient
     @server = server
     @socket = socket
     @log = @server.log
+    @auth = nil
     @log.info { "New connection #{@socket}" }
   end
   def receive()
@@ -40,4 +44,38 @@ class JSONClient
     @socket.write(msg.to_json + "\r\n")
     @log.info { "Send to client: #{msg}" }
   end
+end
+
+class JSONServerKeys
+  def initialize(file_name)
+    @yamlstore = YAML::Store.new(file_name)
+  end
+  def [](key)
+    @yamlstore.transaction(true) do
+      entry = @yamlstore[key]
+    end
+    return entry
+  end
+  def add(entry)
+    @yamlstore.transaction do
+      @yamlstore[entry.key] = entry
+    end
+  end
+end
+
+class JSONServerKeyEntry
+  include Comparable
+  def self.generate(description = "", groups = [])
+    return new(SecureRandom.uuid, description, groups)
+  end
+  def initialize(key, description, groups)
+    @key = key
+    @description = description
+    @groups = groups
+  end
+  def <=>(key)
+    return @key <=> key.key
+  end
+  attr_reader :key
+  attr_accessor :description, :groups
 end

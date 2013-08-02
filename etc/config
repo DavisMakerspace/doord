@@ -6,6 +6,8 @@ module GPIO
   DOOR = 51
 end
 module Daemon
+  Socket = File.join(File.dirname($0), "..", "var", "socket")
+  Keys = File.join(File.dirname($0), "..", "var", "keys")
   UID = Process::UID.from_name("sentry")
   GID = Process::GID.from_name("sentry")
   INPUT_MODE = 0440

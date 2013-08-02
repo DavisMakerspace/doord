@@ -7,10 +7,8 @@ module SentryConfig
 end
 
 keys = JSONServerKeys.new(SentryConfig::Daemon::Keys)
-server = JSONServer.new(UNIXServer.new(SentryConfig::Daemon::Socket), keys)
-while true
-  c = s.accept
-  Thread.new do
-    c.receive { |msg| puts msg }
-  end
-end
+description = ARGV.shift
+groups = ARGV.map { |g| g.to_sym }
+entry = JSONServerKeyEntry.generate(description, groups)
+keys.add(entry)
+puts entry.key
