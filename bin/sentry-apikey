@@ -6,6 +6,8 @@ module SentryConfig
   module_eval File.read(File.join(File.dirname($0), "..", "etc", "config"))
 end
 
+$DEBUG = true
+
 keys = JSONServerKeys.new(SentryConfig::Daemon::Keys)
 description = ARGV.shift
 groups = ARGV.map { |g| g.to_sym }

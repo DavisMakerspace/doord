@@ -13,7 +13,7 @@ class JSONServer
   def accept()
     return JSONClient.new(self, @server.accept)
   end
-  attr_reader :log
+  attr_reader :keys, :log
 end
 
 class JSONClient
@@ -34,10 +34,13 @@ class JSONClient
         @log.error { "Client message resulted in JSON parse error #{error}" }
         send({error: error})
         msg = {}
-      else
-        @log.info { "Client command: #{msg}" }
-        yield msg
       end
+      @log.info { "Client command: #{msg}" }
+      apikey = msg.delete(:apikey)
+      @auth = @server.keys[apikey] if apikey
+      send({error: "Invalid API key"}) if apikey && !@auth
+      send({ack: "Welcome #{@auth.description}"}) if apikey && @auth
+      yield msg if msg != {}
     end
   end
   def send(msg)
@@ -51,6 +54,7 @@ class JSONServerKeys
     @yamlstore = YAML::Store.new(file_name)
   end
   def [](key)
+    entry = nil
     @yamlstore.transaction(true) do
       entry = @yamlstore[key]
     end

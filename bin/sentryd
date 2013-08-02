@@ -6,11 +6,14 @@ module SentryConfig
   module_eval File.read(File.join(File.dirname($0), "..", "etc", "config"))
 end
 
+$DEBUG = true
 keys = JSONServerKeys.new(SentryConfig::Daemon::Keys)
 server = JSONServer.new(UNIXServer.new(SentryConfig::Daemon::Socket), keys)
+log = server.log
+log.level = Logger::DEBUG
 while true
-  c = s.accept
+  client = server.accept
   Thread.new do
-    c.receive { |msg| puts msg }
+    client.receive { |msg| log.debug { "sentryd received message: #{msg}" } }
   end
 end
