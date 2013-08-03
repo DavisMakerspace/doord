@@ -8,11 +8,11 @@ end
 require_relative "../lib/gpio"
 
 DOOR_GPIO = {
-  lock: GPIO.new(SentryConfig::GPIO::LOCK),
-  unlock: GPIO.new(SentryConfig::GPIO::UNLOCK),
-  locked: GPIO.new(SentryConfig::GPIO::LOCKED),
-  unlocked: GPIO.new(SentryConfig::GPIO::UNLOCKED),
-  door: GPIO.new(SentryConfig::GPIO::DOOR)
+  lock: GPIO.new(SentryConfig::GPIO::LOCK, :low),
+  unlock: GPIO.new(SentryConfig::GPIO::UNLOCK, :low),
+  locked: GPIO.new(SentryConfig::GPIO::LOCKED, :in, :both),
+  unlocked: GPIO.new(SentryConfig::GPIO::UNLOCKED, :in, :both),
+  door: GPIO.new(SentryConfig::GPIO::DOOR, :in, :both)
 }
 
 cmd = ARGV.shift
@@ -28,15 +28,8 @@ end
 case cmd
 when :init
   DOOR_GPIO.each do |name, gpio|
-    gpio.export()
-    if [:lock, :unlock].include?(name)
-      gpio.direction = :low
-    else
-      gpio.direction = :in
-    end
-    gpio.edge = :both
-    gpio.value_file.chown(SentryConfig::Daemon::UID, SentryConfig::Daemon::GID)
-    gpio.value_file.chmod(gpio.input? ? SentryConfig::Daemon::INPUT_MODE : SentryConfig::Daemon::OUTPUT_MODE)
+    gpio.chown(SentryConfig::Daemon::UID, SentryConfig::Daemon::GID)
+    gpio.chmod(gpio.input? ? SentryConfig::Daemon::INPUT_MODE : SentryConfig::Daemon::OUTPUT_MODE)
   end
   STDERR.puts "initialized"
 when :uninit
