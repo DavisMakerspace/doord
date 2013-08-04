@@ -24,7 +24,7 @@ class SentryServer
   end
   def run()
     threads = []
-    threads << Thread.new { self.monitor_door }
+    threads << Thread.new { self.monitor }
     threads << Thread.new { self.get_clients }
     threads.each { |thr| thr.join }
   end
@@ -39,9 +39,20 @@ class SentryServer
       Thread.new { SentryClient.new(self, json_client).run }
     end
   end
-  def monitor_door()
-    @door.poll do |value|
-      @mutex.synchronize { @subscribers.each { |c| c.send({door: value}) } }
+  def monitor()
+    poller = GPIOPoller.new([@door, @locked, @unlocked])
+    poller.run() do |gpio|
+      value = gpio.value
+      type = nil
+      case gpio
+      when @door
+        type = :door
+      when @locked
+        type = :locked
+      when @unlocked
+        type = :unlocked
+      end
+      @mutex.synchronize { @subscribers.each { |c| c.send({type => value}) } }
     end
   end
 end
@@ -67,6 +78,8 @@ KEYS = JSONServerKeys.new(SentryConfig::Daemon::Keys)
 LOG = Logger.new(STDERR)
 LOG.level = Logger::DEBUG
 
-json_server = JSONServer.new(UNIXServer.new(SentryConfig::Daemon::Socket), KEYS, LOG)
+json_server = JSONServer.new(UNIXServer.new(SentryConfig::Daemon::SOCKET), KEYS, LOG)
+File.chown(SentryConfig::Daemon::UID, SentryConfig::Daemon::GID, SentryConfig::Daemon::SOCKET)
+File.chmod(SentryConfig::Daemon::SOCKET_MODE, SentryConfig::Daemon::SOCKET)
 sentry_server = SentryServer.new(json_server)
 sentry_server.run
