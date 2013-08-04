@@ -1,19 +1,72 @@
 #!/usr/bin/env ruby
 
+require 'logger'
 require_relative '../lib/jsonserver'
+require_relative "../lib/gpio"
+
+$DEBUG = true
 
 module SentryConfig
   module_eval File.read(File.join(File.dirname($0), "..", "etc", "config"))
 end
 
-$DEBUG = true
-keys = JSONServerKeys.new(SentryConfig::Daemon::Keys)
-server = JSONServer.new(UNIXServer.new(SentryConfig::Daemon::Socket), keys)
-log = server.log
-log.level = Logger::DEBUG
-while true
-  client = server.accept
-  Thread.new do
-    client.receive { |msg| log.debug { "sentryd received message: #{msg}" } }
+class SentryServer
+  def initialize(json_server)
+    @json_server = json_server
+    @log = @json_server.log
+    @lock = GPIO.new(SentryConfig::GPIO::LOCK, :low),
+    @unlock = GPIO.new(SentryConfig::GPIO::UNLOCK, :low),
+    @locked = GPIO.new(SentryConfig::GPIO::LOCKED, :in, :both),
+    @unlocked = GPIO.new(SentryConfig::GPIO::UNLOCKED, :in, :both),
+    @door = GPIO.new(SentryConfig::GPIO::DOOR, :in, :both)
+    @subscribers = []
+    @mutex = Mutex.new
+  end
+  def run()
+    threads = []
+    threads << Thread.new { self.monitor_door }
+    threads << Thread.new { self.get_clients }
+    threads.each { |thr| thr.join }
+  end
+  def subscribe(client)
+    @mutex.synchronize { @subscribers << client }
+  end
+  def unsubscribe(client)
+    @mutex.synchronize { @subscribers.delete client }
+  end
+  def get_clients()
+    @json_server.run do |json_client|
+      Thread.new { SentryClient.new(self, json_client).run }
+    end
+  end
+  def monitor_door()
+    @door.poll do |value|
+      @mutex.synchronize { @subscribers.each { |c| c.send({door: value}) } }
+    end
   end
 end
+
+class SentryClient
+  def initialize(server, json_client)
+    @server = server
+    @json_client = json_client
+  end
+  def run()
+    @server.subscribe self
+    @json_client.receive do |msg|
+      STDERR.puts msg
+    end
+    @server.unsubscribe self
+  end
+  def send(msg)
+    @json_client.send msg
+  end
+end
+
+KEYS = JSONServerKeys.new(SentryConfig::Daemon::Keys)
+LOG = Logger.new(STDERR)
+LOG.level = Logger::DEBUG
+
+json_server = JSONServer.new(UNIXServer.new(SentryConfig::Daemon::Socket), KEYS, LOG)
+sentry_server = SentryServer.new(json_server)
+sentry_server.run

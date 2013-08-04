@@ -10,8 +10,10 @@ class JSONServer
     @keys = keys
     @log = log
   end
-  def accept()
-    return JSONClient.new(self, @server.accept)
+  def run()
+    while socket = @server.accept
+      yield JSONClient.new(self, socket)
+    end
   end
   attr_reader :keys, :log
 end
