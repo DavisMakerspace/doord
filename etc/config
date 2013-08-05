@@ -8,9 +8,7 @@ end
 module Daemon
   SOCKET = File.join(File.dirname($0), "..", "var", "socket")
   SOCKET_MODE = 0660
-  Keys = File.join(File.dirname($0), "..", "var", "keys")
   UID = Process::UID.from_name("sentry")
   GID = Process::GID.from_name("sentry")
-  INPUT_MODE = 0440
-  OUTPUT_MODE = 0660
+  REGISTRY = File.join(File.dirname($0), "..", "var", "registry")
 end

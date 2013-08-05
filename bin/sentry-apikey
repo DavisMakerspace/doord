@@ -8,9 +8,7 @@ end
 
 $DEBUG = true
 
-keys = JSONServerKeys.new(SentryConfig::Daemon::Keys)
-description = ARGV.shift
-groups = ARGV.map { |g| g.to_sym }
-entry = JSONServerKeyEntry.generate(description, groups)
-keys.add(entry)
-puts entry.key
+registry = JSONServerClientRegistry.new(SentryConfig::Daemon::REGISTRY)
+data = "this is a test"
+key = registry.add(data)
+puts key

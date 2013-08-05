@@ -3,6 +3,8 @@
 module SentryConfig
   module_eval File.read(File.join(File.dirname($0), "..", "etc", "config"))
 end
+INPUT_MODE = 0440
+OUTPUT_MODE = 0660
 
 ###
 require_relative "../lib/gpio"
@@ -29,7 +31,7 @@ case cmd
 when :init
   DOOR_GPIO.each do |name, gpio|
     gpio.chown(SentryConfig::Daemon::UID, SentryConfig::Daemon::GID)
-    gpio.chmod(gpio.input? ? SentryConfig::Daemon::INPUT_MODE : SentryConfig::Daemon::OUTPUT_MODE)
+    gpio.chmod(gpio.input? ? INPUT_MODE : OUTPUT_MODE)
   end
   STDERR.puts "initialized"
 when :uninit
