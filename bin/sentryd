@@ -139,8 +139,6 @@ KEYS = JSONServerClientRegistry.new(SentryConfig::Daemon::REGISTRY)
 LOG = Logger.new(STDERR)
 LOG.level = Logger::DEBUG
 
-json_server = JSONServer.new(UNIXServer.new(SentryConfig::Daemon::SOCKET), KEYS, LOG)
-File.chown(SentryConfig::Daemon::UID, SentryConfig::Daemon::GID, SentryConfig::Daemon::SOCKET)
-File.chmod(SentryConfig::Daemon::SOCKET_MODE, SentryConfig::Daemon::SOCKET)
+json_server = JSONServer.new(TCPServer.new(SentryConfig::Daemon::PORT), KEYS, LOG)
 sentry_server = SentryServer.new(json_server)
 sentry_server.run
