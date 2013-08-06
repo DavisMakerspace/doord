@@ -14,11 +14,12 @@ class SentryServer
   def initialize(json_server)
     @json_server = json_server
     @log = @json_server.log
-    @lock = GPIO.new(SentryConfig::GPIO::LOCK, :low),
-    @unlock = GPIO.new(SentryConfig::GPIO::UNLOCK, :low),
-    @locked = GPIO.new(SentryConfig::GPIO::LOCKED, :in, :both),
-    @unlocked = GPIO.new(SentryConfig::GPIO::UNLOCKED, :in, :both),
+    @lock = GPIO.new(SentryConfig::GPIO::LOCK, :low)
+    @unlock = GPIO.new(SentryConfig::GPIO::UNLOCK, :low)
+    @locked = GPIO.new(SentryConfig::GPIO::LOCKED, :in, :both)
+    @unlocked = GPIO.new(SentryConfig::GPIO::UNLOCKED, :in, :both)
     @door = GPIO.new(SentryConfig::GPIO::DOOR, :in, :both)
+    @gpio_mutex = Mutex.new
     @subscribers = []
     @mutex = Mutex.new
   end
@@ -34,6 +35,32 @@ class SentryServer
   def unsubscribe(client)
     @mutex.synchronize { @subscribers.delete client }
   end
+  def lock()
+    @gpio_mutex.synchronize do
+      @lock.set
+      sleep 0.5
+      @lock.clear
+    end
+  end
+  def unlock()
+    @gpio_mutex.synchronize do
+      @unlock.set
+      sleep 0.5
+      @unlock.clear
+    end
+  end
+  def locked?()
+    if @locked.value && !@unlocked.value
+      return true
+    elsif !@locked.value && @unlocked.value
+      return false
+    else
+      return nil
+    end
+  end
+  def door?()
+    return @door.value
+  end
   def get_clients()
     @json_server.run do |json_client|
       Thread.new { SentryClient.new(self, json_client).run }
@@ -42,17 +69,20 @@ class SentryServer
   def monitor()
     poller = GPIOPoller.new([@door, @locked, @unlocked])
     poller.run() do |gpio|
-      value = gpio.value
-      type = nil
+      msg = nil
       case gpio
       when @door
-        type = :door
-      when @locked
-        type = :locked
-      when @unlocked
-        type = :unlocked
+        msg = {door: @door.value}
+      when @locked, @unlocked
+        poller.timeout = 1
+      when nil
+        locked = self.locked?
+        if locked != nil
+          msg = {locked: locked}
+          poller.timeout = nil
+        end
       end
-      @mutex.synchronize { @subscribers.each { |c| c.send({type => value}) } }
+      @mutex.synchronize { @subscribers.each { |c| c.send msg } } if msg
     end
   end
 end
@@ -65,7 +95,28 @@ class SentryClient
   def run()
     @server.subscribe self
     @json_client.receive do |msg|
-      STDERR.puts msg
+      case msg[:action]
+      when "lock"
+        if @server.door?
+          send({error: "Door open; cannot lock"})
+        elsif @server.locked?
+          send({warning: "Already locked"})
+        else
+          send({ack: "Sending lock signal"})
+          @server.lock
+        end
+      when "unlock"
+        if !@json_client.auth
+          send({error: "Not authorized to unlock"})
+        elsif @server.locked === false
+          send({warning: "Already unlocked"})
+        else
+          send({ack: "Sending unlock signal"})
+          @server.unlock
+        end
+      else
+        send({error: "Unknown action"})
+      end
     end
     @server.unsubscribe self
   end

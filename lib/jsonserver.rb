@@ -60,7 +60,13 @@ class JSONClient
       end
       if msg != {}
         @log.info { "Client command: #{msg}" }
-        yield msg
+        begin
+          yield msg
+        rescue Exception => error
+          @log.error { "Client message handler gave error #{error}" }
+          send({error: error})
+          raise error if $DEBUG
+        end
       end
     end
   end
@@ -68,6 +74,7 @@ class JSONClient
     @socket.write(msg.to_json + "\r\n")
     @log.info { "Send to client: #{msg}" }
   end
+  attr_reader :auth
 end
 
 class JSONServerClientRegistry
