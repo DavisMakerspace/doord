@@ -114,8 +114,18 @@ class SentryClient
           send({ack: "Sending unlock signal"})
           @server.unlock
         end
+      when nil
       else
-        send({error: "Unknown action"})
+        send({error: "Unknown action type"})
+      end
+      case msg[:status]
+      when "door"
+        send({door: @server.door?})
+      when "locked"
+        send({locked: @server.locked?})
+      when nil
+      else
+        send({error: "Unknown status type"})
       end
     end
     @server.unsubscribe self
