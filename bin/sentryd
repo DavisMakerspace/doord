@@ -68,17 +68,19 @@ class SentryServer
   end
   def monitor()
     poller = GPIOPoller.new([@door, @locked, @unlocked])
-    poller.run() do |gpio|
+    poller.run() do |gpio, value|
       msg = nil
       case gpio
       when @door
-        msg = {door: @door.value}
+        msg = {door: value}
+        @log.info { "door: #{value}" }
       when @locked, @unlocked
         poller.timeout = 1
       when nil
-        locked = self.locked?
-        if locked != nil
-          msg = {locked: locked}
+        is_locked = self.locked?
+        if is_locked != nil
+          msg = {locked: is_locked}
+          @log.info { "locked: #{is_locked}" }
           poller.timeout = nil
         end
       end
@@ -97,7 +99,9 @@ class SentryClient
     @json_client.receive do |msg|
       case msg[:action]
       when "lock"
-        if @server.door?
+        if !@json_client.auth
+          send({error: "Not authorized to lock"})
+        elsif @server.door?
           send({error: "Door open; cannot lock"})
         elsif @server.locked?
           send({warning: "Already locked"})
