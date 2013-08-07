@@ -40,8 +40,8 @@ class JSONClient
         begin
           msg = JSON::parse(line, {:symbolize_names => true})
         rescue Exception => error
-          @log.error { "Client message gave error #{error}" }
-          send({error: error})
+          @log.error { error.inspect }
+          send_error(error)
         end
       elsif line.size > 0
         send({error: "Unrecognized message"})
@@ -52,8 +52,8 @@ class JSONClient
           uid = auth[:uid]
           auth_result = @server.registry.auth(uid, auth[:key])
         rescue Exception => error
-          @log.error { "Client auth request gave error #{error}" }
-          send({error: error})
+          @log.error { error }
+          send_error(error)
         end
         @auth = auth_result
         if auth_result
@@ -68,9 +68,8 @@ class JSONClient
         begin
           yield msg
         rescue Exception => error
-          @log.error { "Client message handler gave error #{error}" }
-          @log.debug { error.backtrace }
-          send({error: "Internal error"})
+          @log.error { error }
+          send_error(error)
         end
       end
     end
@@ -78,6 +77,9 @@ class JSONClient
   def send(msg)
     @socket.write(msg.to_json + "\r\n")
     @log.info { "Send to client: #{msg}" }
+  end
+  def send_error(error)
+    send({error: {type: error.class.name, message: error.message}})
   end
   attr_reader :auth
 end
