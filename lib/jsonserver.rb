@@ -29,17 +29,22 @@ class JSONClient
     @socket = socket
     @log = @server.log
     @auth = nil
+    send({info: "Welcome"})
     @log.info { "New connection #{@socket}" }
   end
   def receive()
     @socket.each do |line|
       line.strip!
-      begin
-        msg = JSON::parse(line, {:symbolize_names => true})
-      rescue Exception => error
-        @log.error { "Client message gave error #{error}" }
-        send({error: error})
-        msg = {}
+      msg = {}
+      if line.start_with? '{'
+        begin
+          msg = JSON::parse(line, {:symbolize_names => true})
+        rescue Exception => error
+          @log.error { "Client message gave error #{error}" }
+          send({error: error})
+        end
+      elsif line.size > 0
+        send({error: "Unrecognized message"})
       end
       if auth = msg.delete(:auth)
         uid = nil
@@ -64,8 +69,8 @@ class JSONClient
           yield msg
         rescue Exception => error
           @log.error { "Client message handler gave error #{error}" }
-          send({error: error})
-          raise error if $DEBUG
+          @log.debug { error.backtrace }
+          send({error: "Internal error"})
         end
       end
     end
