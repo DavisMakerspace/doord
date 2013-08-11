@@ -7,21 +7,64 @@ require_relative '../lib/jsonserver'
 require_relative "../lib/gpio"
 
 $DEBUG = true
-
 module SentryConfig
   module_eval File.read(File.join(File.dirname($0), "..", "etc", "config"))
 end
 
-class SentryServer
-  def initialize(json_server)
-    @json_server = json_server
-    @log = @json_server.log
+class Door
+  def initialize()
+    @SIGNAL_DURATION = 0.5
     @lock = GPIO.new(SentryConfig::GPIO::LOCK, :low)
     @unlock = GPIO.new(SentryConfig::GPIO::UNLOCK, :low)
     @locked = GPIO.new(SentryConfig::GPIO::LOCKED, :in, :both)
     @unlocked = GPIO.new(SentryConfig::GPIO::UNLOCKED, :in, :both)
-    @door = GPIO.new(SentryConfig::GPIO::DOOR, :in, :both)
-    @gpio_mutex = Mutex.new
+    @opened = GPIO.new(SentryConfig::GPIO::OPENED, :in, :both)
+    @mutex = Mutex.new
+    @was_locked = nil
+  end
+  def lock()
+    @mutex.synchronize do
+      @lock.set; sleep @SIGNAL_DURATION; @lock.clear
+    end
+  end
+  def unlock()
+    @mutex.synchronize do
+      @unlock.set; sleep @SIGNAL_DURATION; @unlock.clear
+    end
+  end
+  def locked?()
+    if @locked.value && !@unlocked.value
+      return true
+    elsif !@locked.value && @unlocked.value
+      return false
+    else
+      return nil
+    end
+  end
+  def opened?()
+    return @opened.value
+  end
+  def monitor()
+    poller = GPIOPoller.new([@opened, @locked, @unlocked])
+    poller.run() do |gpio, value|
+      case gpio
+      when @opened
+        yield :opened, value
+      when @locked, @unlocked
+        is_locked = self.locked?
+        yield :locked, is_locked if is_locked != nil && is_locked != @was_locked
+        @was_locked = is_locked
+      end
+    end
+  end
+end
+
+class SentryServer
+  attr_reader :door
+  def initialize(json_server)
+    @json_server = json_server
+    @log = @json_server.log
+    @door = Door.new
     @subscribers = []
     @mutex = Mutex.new
   end
@@ -37,56 +80,18 @@ class SentryServer
   def unsubscribe(client)
     @mutex.synchronize { @subscribers.delete client }
   end
-  def lock()
-    @gpio_mutex.synchronize do
-      @lock.set
-      sleep 0.5
-      @lock.clear
-    end
-  end
-  def unlock()
-    @gpio_mutex.synchronize do
-      @unlock.set
-      sleep 0.5
-      @unlock.clear
-    end
-  end
-  def locked?()
-    if @locked.value && !@unlocked.value
-      return true
-    elsif !@locked.value && @unlocked.value
-      return false
-    else
-      return nil
-    end
-  end
-  def door?()
-    return @door.value
-  end
   def get_clients()
     @json_server.run do |json_client|
       Thread.new { SentryClient.new(self, json_client).run }
     end
   end
   def monitor()
-    poller = GPIOPoller.new([@door, @locked, @unlocked])
-    poller.run() do |gpio, value|
-      msg = nil
-      case gpio
-      when @door
-        msg = {door: value}
-        @log.info { "door: #{value}" }
-      when @locked, @unlocked
-        poller.timeout = 1
-      when nil
-        is_locked = self.locked?
-        if is_locked != nil
-          msg = {locked: is_locked}
-          @log.info { "locked: #{is_locked}" }
-          poller.timeout = nil
-        end
+    @door.monitor() do |type, value|
+      msg = {type => value}
+      @log.info { "#{type} #{value}" }
+      @mutex.synchronize do
+        @subscribers.each { |c| c.send msg }
       end
-      @mutex.synchronize { @subscribers.each { |c| c.send msg } } if msg
     end
   end
 end
@@ -106,9 +111,9 @@ class SentryClient
       when "lock"
         if !@json_client.auth
           send({error: "Not authorized to lock"})
-        elsif @server.door?
+        elsif @server.door.opened?
           send({error: "Door open; cannot lock"})
-        elsif @server.locked?
+        elsif @server.door.locked?
           send({warning: "Already locked"})
         else
           send({ack: "Sending lock signal"})
@@ -128,16 +133,17 @@ class SentryClient
         send({error: "Unknown action type"})
       end
       case msg[:status]
-      when "door"
-        send({door: @server.door?})
+      when "opened"
+        send({opened: @server.door.opened?})
       when "locked"
-        send({locked: @server.locked?})
+        send({locked: @server.door.locked?})
       when nil
       else
         send({error: "Unknown status type"})
       end
     end
     @server.unsubscribe self
+    LOG.info { "#{@auth} has disconnected" }
   end
   def send(msg)
     @json_client.send msg
@@ -165,10 +171,8 @@ class SentryRegistry
   end
 end
 
-LOG = Logger.new(STDERR)
-LOG.level = Logger::DEBUG
-
-LOG.info(SentryConfig::Daemon::CLIENTS)
+LOG = Logger.new(SentryConfig::Daemon::LOG)
+LOG.level = SentryConfig::Daemon::LOG_LEVEL
 
 ssl_context = OpenSSL::SSL::SSLContext.new
 ssl_context.cert = OpenSSL::X509::Certificate.new(File.open(SentryConfig::Daemon::CERT))

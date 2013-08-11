@@ -1,20 +1,20 @@
 #!/usr/bin/env ruby
 
+require 'logger'
+require_relative "../lib/gpio"
+
 module SentryConfig
   module_eval File.read(File.join(File.dirname($0), "..", "etc", "config"))
 end
 INPUT_MODE = 0440
 OUTPUT_MODE = 0660
 
-###
-require_relative "../lib/gpio"
-
 DOOR_GPIO = {
   lock: GPIO.new(SentryConfig::GPIO::LOCK, :low),
   unlock: GPIO.new(SentryConfig::GPIO::UNLOCK, :low),
   locked: GPIO.new(SentryConfig::GPIO::LOCKED, :in, :both),
   unlocked: GPIO.new(SentryConfig::GPIO::UNLOCKED, :in, :both),
-  door: GPIO.new(SentryConfig::GPIO::DOOR, :in, :both)
+  opened: GPIO.new(SentryConfig::GPIO::OPENED, :in, :both)
 }
 
 cmd = ARGV.shift
@@ -45,13 +45,13 @@ when :lock, :unlock
   sleep 1
   DOOR_GPIO[cmd].clear()
   trap(:EXIT, default)
-when :locked, :unlocked, :door
+when :locked, :unlocked, :opened
   puts DOOR_GPIO[cmd].value
 when :watch
   threads = []
   threads << Thread.new { watch("locked  ", DOOR_GPIO[:locked]) }
   threads << Thread.new { watch("unlocked", DOOR_GPIO[:unlocked]) }
-  threads << Thread.new { watch("door    ", DOOR_GPIO[:door]) }
+  threads << Thread.new { watch("opened  ", DOOR_GPIO[:opened]) }
   threads.each { |thr| thr.join }
 else
   STDERR.puts "usage: #{File.basename $0} <command>"
@@ -61,7 +61,7 @@ else
   STDERR.puts "  unlock   Unlock the deadbolt"
   STDERR.puts "  locked   Is the deadbolt locked?"
   STDERR.puts "  unlocked Is the deadbolt unlocked?"
-  STDERR.puts "  door     Is the door open?"
+  STDERR.puts "  opened   Is the door open?"
   STDERR.puts "  watch    Watch status signals for lock, unlock, and door"
   exit 2
 end

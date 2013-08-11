@@ -3,7 +3,7 @@ module GPIO
   UNLOCK = 30
   LOCKED = 48
   UNLOCKED = 60
-  DOOR = 51
+  OPENED = 51
 end
 module Daemon
   PORT = 1337
@@ -12,4 +12,6 @@ module Daemon
   KEY = File.join(File.dirname($0), "..", "etc", "key.pem")
   CERT = File.join(File.dirname($0), "..", "etc", "cert.pem")
   CLIENTS = File.realpath(File.join(File.dirname($0), "..", "etc", "clients"))
+  LOG = STDERR
+  LOG_LEVEL = Logger::DEBUG
 end
