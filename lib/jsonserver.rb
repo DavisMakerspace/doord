@@ -1,35 +1,34 @@
 require 'logger'
 require 'socket'
 require 'json'
-require 'yaml/store'
-require 'securerandom'
-require 'openssl'
 
 class JSONServerException < RuntimeError; end
-class JSONServerClientRegistryDuplicateUIDError < JSONServerException; end
-class JSONServerClientRegistryNonexistentUIDError < JSONServerException; end
 
 class JSONServer
-  def initialize(server, registry, log = Logger.new(STDERR))
+  def initialize(server, log = Logger.new(STDERR))
     @server = server
-    @registry = registry
     @log = log
   end
   def run()
-    while socket = @server.accept
-      yield JSONClient.new(self, socket)
+    loop do
+      begin
+        socket = @server.accept
+      rescue Exception => error
+        @log.error { error.inspect }
+      else
+        yield JSONServerClient.new(self, socket)
+      end
     end
   end
-  attr_reader :registry, :log
+  attr_reader :log
 end
 
-class JSONClient
+class JSONServerClient
+  attr_reader :socket
   def initialize(server, socket)
     @server = server
     @socket = socket
     @log = @server.log
-    @auth = nil
-    send({info: "Welcome"})
     @log.info { "New connection #{@socket}" }
   end
   def receive()
@@ -45,23 +44,6 @@ class JSONClient
         end
       elsif line.size > 0
         send({error: "Unrecognized message"})
-      end
-      if auth = msg.delete(:auth)
-        uid = nil
-        begin
-          uid = auth[:uid]
-          auth_result = @server.registry.auth(uid, auth[:key])
-        rescue Exception => error
-          @log.error { error }
-          send_error(error)
-        end
-        @auth = auth_result
-        if auth_result
-          @log.info { "Client authenticated as #{@auth}" }
-        else
-          @log.warn { "Client failed to authenticate as #{uid}" }
-        end
-        send({auth: @auth})
       end
       if msg != {}
         @log.info { "Client command: #{msg}" }
@@ -80,58 +62,5 @@ class JSONClient
   end
   def send_error(error)
     send({error: {type: error.class.name, message: error.message}})
-  end
-  attr_reader :auth
-end
-
-class JSONServerClientRegistry
-  def initialize(file_name, default_length = 32, default_digest = 'sha512')
-    File.open(file_name, "w") if !File.exist?(file_name)
-    @store = YAML::Store.new(file_name, true)
-    @default_length = default_length
-    @default_digest = default_digest
-  end
-  def create(uid, length = @default_length, digest = @default_digest)
-    uid = uid.to_sym
-    raise JSONServerClientRegistryDuplicateUIDError.new if uid?(uid)
-    key = SecureRandom.urlsafe_base64(length)
-    hashed_key = OpenSSL::Digest.digest(digest, key)
-    @store.transaction do
-      @store[uid] = {digest:digest, hashed_key:hashed_key}
-    end
-    return key
-  end
-  def uid?(uid)
-    uid = uid.to_sym
-    exists = nil
-    @store.transaction(true) do
-      exists = @store.root?(uid.to_sym)
-    end
-    return exists
-  end
-  def uids()
-    uids = nil
-    @store.transaction(true) do
-      uids = @store.roots
-    end
-    return uids
-  end
-  def auth(uid, key)
-    uid = uid.to_sym
-    authed = false
-    @store.transaction(true) do
-      return if !@store.root?(uid)
-      entry = @store[uid]
-      hashed_key = OpenSSL::Digest.digest(entry[:digest], key)
-      authed = (hashed_key == entry[:hashed_key])
-    end
-    return authed ? uid : nil
-  end
-  def delete(uid)
-    uid = uid.to_sym
-    raise JSONServerClientRegistryNonexistentUIDError.new if !uid?(uid)
-    @store.transaction do
-      @store.delete(uid)
-    end
   end
 end
