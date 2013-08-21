@@ -109,7 +109,7 @@ class SentryClient
     @json_client.receive do |msg|
       case msg[:action]
       when "lock"
-        if !@auth
+        if !@auth || !SentryConfig::Daemon::ALLOW_UNLOCK.include?(@auth)
           send({error: "Not authorized to lock"})
         elsif @server.door.opened?
           send({error: "Door open; cannot lock"})
@@ -120,7 +120,7 @@ class SentryClient
           @server.door.lock
         end
       when "unlock"
-        if !@auth
+        if !@auth || !SentryConfig::Daemon::ALLOW_LOCK.include?(@auth)
           send({error: "Not authorized to unlock"})
         elsif @server.door.locked? === false
           send({warning: "Already unlocked"})
