@@ -1,0 +1,44 @@
+#!/usr/bin/env ruby
+
+require_relative '../lib/hashable'
+
+require 'minitest/spec'
+require 'minitest/autorun'
+
+class Inner
+  include Hashable
+  attr_accessor :attr
+  def ==(other)
+    attr == other.attr
+  end
+end
+
+class Outer
+  include Hashable
+  attr_accessor :attr1, :attr2
+  attr_reader :inner
+  def initialize()
+    @inner = Inner.new
+  end
+  def ==(other)
+    [attr1, attr2, inner] == [other.attr1, other.attr2, other.inner]
+  end
+end
+
+describe Hashable do
+  before do
+    @obj = Outer.new
+    @obj.attr1 = "value 1"
+    @obj.attr2 = 2
+    @obj.inner.attr = "inner_value"
+    @hash = {:class=>:Outer, :inner=>{:class=>:Inner, :attr=>"inner_value"}, :attr1=>"value 1", :attr2=>2}
+  end
+
+  it "can make a hash" do
+    @obj.to_hash.must_equal @hash
+  end
+
+  it "can be made from a hash" do
+    (Outer.new.from_hash @hash).must_equal @obj
+  end
+end
