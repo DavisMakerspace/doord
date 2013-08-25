@@ -14,11 +14,13 @@ end
 class Door
   def initialize()
     @SIGNAL_DURATION = 0.5
+    @LOCKING_TIMEOUT = 2
     @lock = GPIO.new(SentryConfig::GPIO::LOCK, :low)
     @unlock = GPIO.new(SentryConfig::GPIO::UNLOCK, :low)
     @locked = GPIO.new(SentryConfig::GPIO::LOCKED, :in, :both)
     @unlocked = GPIO.new(SentryConfig::GPIO::UNLOCKED, :in, :both)
     @opened = GPIO.new(SentryConfig::GPIO::OPENED, :in, :both)
+    @poller = GPIOPoller.new([@opened, @locked, @unlocked])
     @mutex = Mutex.new
     @was_locked = nil
   end
@@ -45,15 +47,24 @@ class Door
     return @opened.value
   end
   def monitor()
-    poller = GPIOPoller.new([@opened, @locked, @unlocked])
-    poller.run() do |gpio, value|
+    @poller.run() do |gpio, value|
       case gpio
       when @opened
         yield :opened, value
       when @locked, @unlocked
         is_locked = self.locked?
-        yield :locked, is_locked if is_locked != nil && is_locked != @was_locked
-        @was_locked = is_locked
+        if is_locked == nil
+          @poller.timeout = @LOCKING_TIMEOUT
+        else
+          changed = (is_locked != @was_locked)
+          @was_locked = is_locked
+          @poller.timeout = nil
+          yield :locked, is_locked if changed
+        end
+      when nil
+        @poller.timeout = nil
+        @was_locked = nil
+        yield :locked, nil
       end
     end
   end
@@ -88,7 +99,7 @@ class SentryServer
   def monitor()
     @door.monitor() do |type, value|
       msg = {type => value}
-      @log.info { "#{type} #{value}" }
+      @log.info { "#{type} #{value.inspect}" }
       @mutex.synchronize do
         @subscribers.each { |c| c.send msg }
       end
