@@ -111,7 +111,8 @@ class SentryClient
   def initialize(server, json_client)
     @server = server
     @json_client = json_client
-    @auth = @json_client.socket.peer_cert.subject
+    @auths = @json_client.socket.common_names
+    @auth = @auths ? @auths[0] : nil
     LOG.info { "#{@auth} has connected" }
   end
   def run()

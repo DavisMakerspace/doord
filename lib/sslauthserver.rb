@@ -14,3 +14,19 @@ class SSLAuthServer < OpenSSL::SSL::SSLServer
     super(server, ssl_context)
   end
 end
+
+module OpenSSL
+  module SSL
+    class SSLSocket
+      DN_NAME, DN_DATA = 0,1
+      def common_names
+        return nil if !peer_cert
+        common_names = []
+        peer_cert.subject.to_a.each do |entry|
+          common_names << entry[DN_DATA] if entry[DN_NAME] == 'CN'
+        end
+        return common_names
+      end
+    end
+  end
+end
