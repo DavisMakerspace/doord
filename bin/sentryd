@@ -1,10 +1,10 @@
 #!/usr/bin/env ruby
 
 require 'logger'
-require 'openssl'
 
+require_relative '../lib/gpio'
 require_relative '../lib/jsonserver'
-require_relative "../lib/gpio"
+require_relative '../lib/sslauthserver'
 
 $DEBUG = true
 module SentryConfig
@@ -111,7 +111,7 @@ class SentryClient
   def initialize(server, json_client)
     @server = server
     @json_client = json_client
-    @auth = REGISTRY.lookup(@json_client.socket.peer_cert)
+    @auth = @json_client.socket.peer_cert.subject
     LOG.info { "#{@auth} has connected" }
   end
   def run()
@@ -161,43 +161,20 @@ class SentryClient
   end
 end
 
-class SentryRegistry
-  attr_reader :openssl_store
-  def initialize()
-    @openssl_store = OpenSSL::X509::Store.new
-    @uids = {}
-  end
-  def add(dirname)
-    Dir.new(dirname).each { |filename|
-      filename = File.join(dirname, filename)
-      if File.file? filename
-        cert = OpenSSL::X509::Certificate.new(File.read(filename))
-        @openssl_store.add_cert cert
-        @uids[cert.to_text] = File.basename(filename)
-      end
-    }
-  end
-  def lookup(cert)
-    return @uids[cert.to_text]
-  end
-end
-
 LOG = Logger.new(SentryConfig::Daemon::LOG)
 LOG.level = SentryConfig::Daemon::LOG_LEVEL
 
-ssl_context = OpenSSL::SSL::SSLContext.new
-ssl_context.cert = OpenSSL::X509::Certificate.new(File.open(SentryConfig::Daemon::CERT))
-ssl_context.key = OpenSSL::PKey::RSA.new(File.open(SentryConfig::Daemon::KEY))
-#ssl_context.verify_mode = OpenSSL::SSL::VERIFY_PEER | OpenSSL::SSL::VERIFY_FAIL_IF_NO_PEER_CERT
-ssl_context.verify_mode = OpenSSL::SSL::VERIFY_PEER
-
-REGISTRY = SentryRegistry.new
-REGISTRY.add(SentryConfig::Daemon::CLIENTS)
-ssl_context.cert_store = REGISTRY.openssl_store
-
+CERT_EXT = 'pem'
+clients_certs = []
+Dir.glob(File.join(SentryConfig::Daemon::CLIENTS, "*.#{CERT_EXT}")).each do |filename|
+  clients_certs << File.read(filename) if File.file? filename
+end
 socket_server = TCPServer.new(SentryConfig::Daemon::PORT)
-
-ssl_server = OpenSSL::SSL::SSLServer.new(socket_server, ssl_context)
-json_server = JSONServer.new(ssl_server, LOG)
+ssl_auth_server = SSLAuthServer.new(
+  socket_server,
+  File.read(SentryConfig::Daemon::CERT),
+  File.read(SentryConfig::Daemon::KEY),
+  clients_certs)
+json_server = JSONServer.new(ssl_auth_server, LOG)
 sentry_server = SentryServer.new(json_server)
 sentry_server.run
