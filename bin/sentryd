@@ -119,7 +119,7 @@ class SentryClient
     @ids = @json_client.socket.uids
     @id = @ids ? @ids[0] : nil
     @secrets = SecretStore.new SentryConfig::Daemon::SECRETS
-    @uid = nil
+    @user = nil
     LOG.info { "#{@id} has connected" }
   end
   def run()
@@ -128,11 +128,11 @@ class SentryClient
     @json_client.receive do |msg|
       case msg[:action]
       when "auth"
-        uid = msg[:uid].to_s
-        @uid = @secrets.auth?({client: @id, uid: uid}, msg[:secret]) ? uid : nil
-        send({class: :auth, uid: @uid})
+        user = msg[:user].to_s
+        @user = @secrets.auth?({client: @id, user: user}, msg[:secret]) ? user : nil
+        send({class: :auth, user: @user})
       when "lock"
-        if !@uid
+        if !@user
           send({error: "Not authorized to lock"})
         elsif @server.door.opened?
           send({error: "Door open; cannot lock"})
@@ -143,7 +143,7 @@ class SentryClient
           @server.door.lock
         end
       when "unlock"
-        if !@uid
+        if !@user
           send({error: "Not authorized to unlock"})
         elsif @server.door.locked? === false
           send({warning: "Already unlocked"})
@@ -188,20 +188,46 @@ def cmd_list_clients()
   end
 end
 
-def cmd_add_user()
+def cmd_user_add()
   client = ARGV.shift
   user = ARGV.shift
   name = ARGV.shift
   email = ARGV.shift
   if !client || !user || !name || !email
-    STDERR.puts "Usage: #{$0} add-uid <client> <user> <name> <email>"
+    STDERR.puts "Usage: #{$0} user-add <client> <user> <name> <email>"
     exit 1
   end
-  id = {client: client, uid: uid}
-  data = {name: name, email: email}
+  id = {client: client, user: user}
   secrets = SecretStore.new SentryConfig::Daemon::SECRETS
+  if secrets.exists? id
+    STDERR.puts "User #{user} for client #{client} already exists"
+    exit 2
+  end
+  data = {name: name, email: email}
   secrets.add id, data
   puts "Added #{user} #{name.inspect} <#{email}> for client #{client}"
+end
+
+def cmd_user_rm()
+  client = ARGV.shift
+  user = ARGV.shift
+  if !client || !user
+    STDERR.puts "Usage: #{$0} user-rm <client> <user>"
+    exit 1
+  end
+  secrets = SecretStore.new SentryConfig::Daemon::SECRETS
+  id = {client: client, user: user}
+  if !secrets.exists? id
+    STDERR.puts "User #{user} for client #{client} does not exist"
+    exit 2
+  end
+  success = secrets.remove id
+  if success
+    puts "Removed #{user} from client #{client}"
+  else
+    STDERR.puts "Removal failed"
+    exit 3
+  end
 end
 
 def cmd_run()
@@ -222,6 +248,14 @@ when "list-clients"
   cmd_list_clients
 when "add-user"
   cmd_add_user
-else
+when "rm-user"
+  cmd_rm_user
+when "run"
   cmd_run
+else
+  STDERR.puts "Usage: #{$0} COMMAND ..."
+  STDERR.puts "  user-add  Add a user to a client"
+  STDERR.puts "  user-rm   Remove a user from a client"
+  STDERR.puts "  run       Run the sentry daemon"
+  exit 1
 end
