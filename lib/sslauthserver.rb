@@ -16,16 +16,23 @@ class SSLAuthServer < OpenSSL::SSL::SSLServer
 end
 
 module OpenSSL
-  module SSL
-    class SSLSocket
+  module X509
+    class Certificate
       DN_NAME, DN_DATA = 0,1
       def common_names
-        return nil if !peer_cert
         common_names = []
-        peer_cert.subject.to_a.each do |entry|
+        subject.to_a.each do |entry|
           common_names << entry[DN_DATA] if entry[DN_NAME] == 'CN'
         end
         return common_names
+      end
+    end
+  end
+  module SSL
+    class SSLSocket
+      def common_names
+        return nil if !peer_cert
+        return peer_cert.common_names
       end
     end
   end
