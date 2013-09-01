@@ -30,7 +30,7 @@ end
 case cmd
 when :init
   DOOR_GPIO.each do |name, gpio|
-    gpio.chown(SentryConfig::Daemon::UID, SentryConfig::Daemon::GID)
+    gpio.chown(Process::UID.from_name(SentryConfig::Daemon::UID), Process::GID.from_name(SentryConfig::Daemon::GID))
     gpio.chmod(gpio.input? ? INPUT_MODE : OUTPUT_MODE)
   end
   STDERR.puts "initialized"

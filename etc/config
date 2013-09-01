@@ -7,8 +7,8 @@ module GPIO
 end
 module Daemon
   PORT = 1337
-  UID = Process::UID.from_name("sentry")
-  GID = Process::GID.from_name("sentry")
+  UID = "sentry"
+  GID = "sentry"
   KEY = File.join(File.dirname($0), "..", "etc", "key.pem")
   CERT = File.join(File.dirname($0), "..", "etc", "cert.pem")
   CLIENTS = File.realpath(File.join(File.dirname($0), "..", "etc", "clients"))
