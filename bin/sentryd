@@ -116,27 +116,23 @@ class SentryClient
   def initialize(server, json_client)
     @server = server
     @json_client = json_client
-    @names = @json_client.socket.common_names
-    @name = @names ? @names[0] : nil
+    @ids = @json_client.socket.uids
+    @id = @ids ? @ids[0] : nil
     @secrets = SecretStore.new SentryConfig::Daemon::SECRETS
-    @auth = nil
-    LOG.info { "#{@name} has connected" }
+    @uid = nil
+    LOG.info { "#{@id} has connected" }
   end
   def run()
-    send({banner: "Welcome client #{@name}"})
+    send({banner: "Welcome client #{@id}"})
     @server.subscribe self
     @json_client.receive do |msg|
       case msg[:action]
       when "auth"
-        if @secrets.auth?({client: @name, id: msg[:id]}, msg[:secret])
-          @auth = @msg[:id]
-          send({class: :auth, status: true})
-        else
-          @auth = nil
-          send({class: :auth, status: false})
-        end
+        uid = msg[:uid].to_s
+        @uid = @secrets.auth?({client: @id, uid: uid}, msg[:secret]) ? uid : nil
+        send({class: :auth, uid: @uid})
       when "lock"
-        if !@auth
+        if !@uid
           send({error: "Not authorized to lock"})
         elsif @server.door.opened?
           send({error: "Door open; cannot lock"})
@@ -147,7 +143,7 @@ class SentryClient
           @server.door.lock
         end
       when "unlock"
-        if !@auth
+        if !@uid
           send({error: "Not authorized to unlock"})
         elsif @server.door.locked? === false
           send({warning: "Already unlocked"})
@@ -170,7 +166,7 @@ class SentryClient
       end
     end
     @server.unsubscribe self
-    LOG.info { "#{@name} has disconnected" }
+    LOG.info { "#{@id} has disconnected" }
   end
   def send(msg)
     @json_client.send msg
@@ -188,24 +184,24 @@ end
 def cmd_list_clients()
   clients_certs.each do |cert|
     x509 = OpenSSL::X509::Certificate.new cert
-    x509.common_names.each { |cn| puts cn }
+    x509.uids.each { |uid| puts uid }
   end
 end
 
-def cmd_add_auth()
+def cmd_add_user()
   client = ARGV.shift
-  id = ARGV.shift
+  user = ARGV.shift
   name = ARGV.shift
   email = ARGV.shift
-  if !client || !id || !name || !email
-    STDERR.puts "Usage: #{$0} add-auth <client> <id> <name> <email>"
+  if !client || !user || !name || !email
+    STDERR.puts "Usage: #{$0} add-uid <client> <user> <name> <email>"
     exit 1
   end
-  auth_id = {client: client, id: id}
-  auth_data = {name: name, email: email}
+  id = {client: client, uid: uid}
+  data = {name: name, email: email}
   secrets = SecretStore.new SentryConfig::Daemon::SECRETS
-  secrets.add auth_id, auth_data
-  puts "Added #{id} #{name.inspect} <#{email}> for client #{client}"
+  secrets.add id, data
+  puts "Added #{user} #{name.inspect} <#{email}> for client #{client}"
 end
 
 def cmd_run()
@@ -224,8 +220,8 @@ cmd = ARGV.shift
 case cmd
 when "list-clients"
   cmd_list_clients
-when "add-auth"
-  cmd_add_auth
+when "add-user"
+  cmd_add_user
 else
   cmd_run
 end

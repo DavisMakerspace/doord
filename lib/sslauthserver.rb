@@ -19,20 +19,20 @@ module OpenSSL
   module X509
     class Certificate
       DN_NAME, DN_DATA = 0,1
-      def common_names
-        common_names = []
+      def uids
+        uids = []
         subject.to_a.each do |entry|
-          common_names << entry[DN_DATA] if entry[DN_NAME] == 'CN'
+          uids << entry[DN_DATA] if entry[DN_NAME] == 'UID'
         end
-        return common_names
+        return uids
       end
     end
   end
   module SSL
     class SSLSocket
-      def common_names
+      def uids
         return nil if !peer_cert
-        return peer_cert.common_names
+        return peer_cert.uids
       end
     end
   end
