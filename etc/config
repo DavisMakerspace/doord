@@ -12,6 +12,7 @@ module Daemon
   KEY = File.join(File.dirname($0), "..", "etc", "key.pem")
   CERT = File.join(File.dirname($0), "..", "etc", "cert.pem")
   CLIENTS = File.realpath(File.join(File.dirname($0), "..", "etc", "clients"))
+  SECRETS = File.realpath(File.join(File.dirname($0), "..", "etc", "secrets"))
   ALLOW_LOCK = []
   ALLOW_UNLOCK = []
   LOG = STDERR

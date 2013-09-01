@@ -5,11 +5,16 @@ require 'logger'
 require_relative '../lib/gpio'
 require_relative '../lib/jsonserver'
 require_relative '../lib/sslauthserver'
+require_relative '../lib/secretstore'
 
-$DEBUG = true
 module SentryConfig
   module_eval File.read(File.join(File.dirname($0), "..", "etc", "config"))
 end
+CERT_EXT = 'pem'
+LOG = Logger.new(SentryConfig::Daemon::LOG)
+LOG.level = SentryConfig::Daemon::LOG_LEVEL
+
+$DEBUG = true
 
 class Door
   def initialize()
@@ -111,17 +116,27 @@ class SentryClient
   def initialize(server, json_client)
     @server = server
     @json_client = json_client
-    @auths = @json_client.socket.common_names
-    @auth = @auths ? @auths[0] : nil
-    LOG.info { "#{@auth} has connected" }
+    @names = @json_client.socket.common_names
+    @name = @names ? @names[0] : nil
+    @secrets = SecretStore.new SentryConfig::Daemon::SECRETS
+    @auth = nil
+    LOG.info { "#{@name} has connected" }
   end
   def run()
-    send({banner: "Welcome #{@auth}"})
+    send({banner: "Welcome client #{@name}"})
     @server.subscribe self
     @json_client.receive do |msg|
       case msg[:action]
+      when "auth"
+        if @secrets.auth?({client: @name, id: msg[:id]}, msg[:secret])
+          @auth = @msg[:id]
+          send({class: :auth, status: true})
+        else
+          @auth = nil
+          send({class: :auth, status: false})
+        end
       when "lock"
-        if !@auth || !SentryConfig::Daemon::ALLOW_UNLOCK.include?(@auth)
+        if !@auth
           send({error: "Not authorized to lock"})
         elsif @server.door.opened?
           send({error: "Door open; cannot lock"})
@@ -132,7 +147,7 @@ class SentryClient
           @server.door.lock
         end
       when "unlock"
-        if !@auth || !SentryConfig::Daemon::ALLOW_LOCK.include?(@auth)
+        if !@auth
           send({error: "Not authorized to unlock"})
         elsif @server.door.locked? === false
           send({warning: "Already unlocked"})
@@ -155,27 +170,62 @@ class SentryClient
       end
     end
     @server.unsubscribe self
-    LOG.info { "#{@auth} has disconnected" }
+    LOG.info { "#{@name} has disconnected" }
   end
   def send(msg)
     @json_client.send msg
   end
 end
 
-LOG = Logger.new(SentryConfig::Daemon::LOG)
-LOG.level = SentryConfig::Daemon::LOG_LEVEL
-
-CERT_EXT = 'pem'
-clients_certs = []
-Dir.glob(File.join(SentryConfig::Daemon::CLIENTS, "*.#{CERT_EXT}")).each do |filename|
-  clients_certs << File.read(filename) if File.file? filename
+def clients_certs()
+  certs = []
+  Dir.glob(File.join(SentryConfig::Daemon::CLIENTS, "*.#{CERT_EXT}")).each do |filename|
+    certs << File.read(filename) if File.file? filename
+  end
+  return certs
 end
-socket_server = TCPServer.new(SentryConfig::Daemon::PORT)
-ssl_auth_server = SSLAuthServer.new(
-  socket_server,
-  File.read(SentryConfig::Daemon::CERT),
-  File.read(SentryConfig::Daemon::KEY),
-  clients_certs)
-json_server = JSONServer.new(ssl_auth_server, LOG)
-sentry_server = SentryServer.new(json_server)
-sentry_server.run
+
+def cmd_list_clients()
+  clients_certs.each do |cert|
+    x509 = OpenSSL::X509::Certificate.new cert
+    x509.common_names.each { |cn| puts cn }
+  end
+end
+
+def cmd_add_auth()
+  client = ARGV.shift
+  id = ARGV.shift
+  name = ARGV.shift
+  email = ARGV.shift
+  if !client || !id || !name || !email
+    STDERR.puts "Usage: #{$0} add-auth <client> <id> <name> <email>"
+    exit 1
+  end
+  auth_id = {client: client, id: id}
+  auth_data = {name: name, email: email}
+  secrets = SecretStore.new SentryConfig::Daemon::SECRETS
+  secrets.add auth_id, auth_data
+  puts "Added #{id} #{name.inspect} <#{email}> for client #{client}"
+end
+
+def cmd_run()
+  socket_server = TCPServer.new(SentryConfig::Daemon::PORT)
+  ssl_auth_server = SSLAuthServer.new(
+    socket_server,
+    File.read(SentryConfig::Daemon::CERT),
+    File.read(SentryConfig::Daemon::KEY),
+    clients_certs)
+  json_server = JSONServer.new(ssl_auth_server, LOG)
+  sentry_server = SentryServer.new(json_server)
+  sentry_server.run
+end
+
+cmd = ARGV.shift
+case cmd
+when "list-clients"
+  cmd_list_clients
+when "add-auth"
+  cmd_add_auth
+else
+  cmd_run
+end
