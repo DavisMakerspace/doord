@@ -230,7 +230,7 @@ def cmd_user_rm()
   end
 end
 
-def cmd_run()
+def cmd_server()
   socket_server = TCPServer.new(SentryConfig::Daemon::PORT)
   ssl_auth_server = SSLAuthServer.new(
     socket_server,
@@ -250,12 +250,12 @@ when "add-user"
   cmd_add_user
 when "rm-user"
   cmd_rm_user
-when "run"
-  cmd_run
+when "server"
+  cmd_server
 else
   STDERR.puts "Usage: #{$0} COMMAND ..."
   STDERR.puts "  user-add  Add a user to a client"
   STDERR.puts "  user-rm   Remove a user from a client"
-  STDERR.puts "  run       Run the sentry daemon"
+  STDERR.puts "  server    Start the sentry server"
   exit 1
 end
