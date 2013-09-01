@@ -7,10 +7,10 @@ class SecretStore
   def initialize(path)
     @store = YAML::Store.new path
   end
-  def create(id)
+  def add(id, data=nil)
     @store.transaction do
       return false if @store.root?(id)
-      @store[id] = {secret: nil, data: nil}
+      @store[id] = {secret: nil, data: data}
     end
     return true
   end
@@ -39,7 +39,7 @@ class SecretStore
       return @store.root?(id)
     end
   end
-  def delete(id)
+  def remove(id)
     @store.transaction do
       return false if !@store.root?(id)
       @store.delete id
