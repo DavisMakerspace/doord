@@ -9,7 +9,7 @@ module Daemon
   PORT = 1337
   UID = "sentry"
   GID = "sentry"
-  KEY = File.join(File.dirname($0), "..", "etc", "key.pem")
+  KEY = File.join(File.dirname($0), "..", "etc", "privkey.pem")
   CERT = File.join(File.dirname($0), "..", "etc", "cert.pem")
   CLIENTS = File.realpath(File.join(File.dirname($0), "..", "etc", "clients"))
   SECRETS = File.realpath(File.join(File.dirname($0), "..", "etc", "secrets"))

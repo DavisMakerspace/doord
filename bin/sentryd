@@ -246,14 +246,14 @@ cmd = ARGV.shift
 case cmd
 when "list-clients"
   cmd_list_clients
-when "add-user"
-  cmd_add_user
-when "rm-user"
-  cmd_rm_user
+when "user-add"
+  cmd_user_add
+when "user_rm"
+  cmd_user_rm
 when "server"
   cmd_server
 else
-  STDERR.puts "Usage: #{$0} COMMAND ..."
+  STDERR.puts "Usage: #{$0} <command> ..."
   STDERR.puts "  user-add  Add a user to a client"
   STDERR.puts "  user-rm   Remove a user from a client"
   STDERR.puts "  server    Start the sentry server"
