@@ -1,7 +1,7 @@
 module Hashable
   def from_hash(hash, namespace: [])
     prefix = namespace.empty? ? '' : namespace.join('::')+'::'
-    return if self.class.name != prefix+hash[:class].to_s
+    return hash if self.class.name != prefix+hash[:class].to_s
     hash.each do |attr, value|
       next if attr == :class
       attr_name = attr.to_s.prepend('@').to_sym
@@ -28,7 +28,12 @@ module Hashable
 end
 
 class Hash
-  def from_hash(namespace=[])
-
+  def from_hash(namespace: [])
+    obj = Object
+    namespace.each do |name|
+      obj = obj.const_get name
+    end
+    obj = obj.const_get self[:class]
+    return obj.new.from_hash(self, namespace: namespace)
   end
 end

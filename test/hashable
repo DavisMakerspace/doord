@@ -67,6 +67,7 @@ describe Hashable do
 
   it "can be made from a hash" do
     (Outer.new.from_hash @hash).must_equal @obj
+    @hash.from_hash.must_equal @obj
   end
 
   it "can make a hash in a namespace" do
@@ -75,5 +76,6 @@ describe Hashable do
 
   it "can be made from a hash in a namespace" do
     (Namespaced::Outer.new.from_hash(@hash2, namespace: ['Namespaced'])).must_equal @obj2
+    @hash2.from_hash(namespace: ['Namespaced']).must_equal @obj2
   end
 end
