@@ -1,13 +1,13 @@
 #!/usr/bin/env ruby
 
-CONFIG = "/etc/sentry/config"
+CONFIG = '/etc/sentry/config'
+LIB = File.realpath '../lib', File.dirname(__FILE__)
 
 require 'logger'
-
-require_relative '../lib/gpio'
-require_relative '../lib/jsonserver'
-require_relative '../lib/sslauthserver'
-require_relative '../lib/secretstore'
+require "#{LIB}/gpio"
+require "#{LIB}/jsonserver"
+require "#{LIB}/sslauthserver"
+require "#{LIB}/secretstore"
 
 module SentryConfig
   module_eval File.read CONFIG
