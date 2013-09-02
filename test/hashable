@@ -5,6 +5,8 @@ require_relative '../lib/hashable'
 require 'minitest/spec'
 require 'minitest/autorun'
 
+$DEBUG = true
+
 class Inner
   include Hashable
   attr_accessor :attr
@@ -12,7 +14,6 @@ class Inner
     attr == other.attr
   end
 end
-
 class Outer
   include Hashable
   attr_accessor :attr1, :attr2
@@ -25,13 +26,39 @@ class Outer
   end
 end
 
+module Namespaced
+  class Inner
+    include Hashable
+    attr_accessor :attr2
+    def ==(other)
+      attr2 == other.attr2
+    end
+  end
+  class Outer
+    include Hashable
+    attr_accessor :attr3, :attr4
+    attr_reader :inner
+    def initialize()
+      @inner = Inner.new
+    end
+    def ==(other)
+      [attr3, attr4, inner] == [other.attr3, other.attr4, other.inner]
+    end
+  end
+end
+
 describe Hashable do
   before do
     @obj = Outer.new
     @obj.attr1 = "value 1"
     @obj.attr2 = 2
     @obj.inner.attr = "inner_value"
-    @hash = {:class=>:Outer, :inner=>{:class=>:Inner, :attr=>"inner_value"}, :attr1=>"value 1", :attr2=>2}
+    @hash = {:class=>:Outer, :attr1=>"value 1", :attr2=>2, :inner=>{:class=>:Inner, :attr=>"inner_value"}}
+    @obj2 = Namespaced::Outer.new
+    @obj2.attr3 = "value 3"
+    @obj2.attr4 = 4
+    @obj2.inner.attr2 = "inner_value_namespaced"
+    @hash2 = {:class=>:Outer, :attr3=>"value 3", :attr4=>4, :inner=>{:class=>:Inner, :attr2=>"inner_value_namespaced"}}
   end
 
   it "can make a hash" do
@@ -40,5 +67,13 @@ describe Hashable do
 
   it "can be made from a hash" do
     (Outer.new.from_hash @hash).must_equal @obj
+  end
+
+  it "can make a hash in a namespace" do
+    @obj2.to_hash(['Namespaced']).must_equal @hash2
+  end
+
+  it "can be made from a hash in a namespace" do
+    (Namespaced::Outer.new.from_hash(@hash2, ['Namespaced'])).must_equal @obj2
   end
 end
