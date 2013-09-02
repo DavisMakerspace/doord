@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 
+CONFIG = "/etc/sentry/config"
+
 require 'logger'
 
 require_relative '../lib/gpio'
@@ -8,7 +10,7 @@ require_relative '../lib/sslauthserver'
 require_relative '../lib/secretstore'
 
 module SentryConfig
-  module_eval File.read(File.join(File.dirname($0), "..", "etc", "config"))
+  module_eval File.read CONFIG
 end
 CERT_EXT = 'pem'
 LOG = Logger.new(SentryConfig::Daemon::LOG)
