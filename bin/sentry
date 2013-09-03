@@ -4,7 +4,7 @@ CONFIG = '/etc/sentry/config'
 LIB = File.realpath '../lib', File.dirname(__FILE__)
 
 require 'logger'
-require "#{LIB}/gpio"
+require "#{LIB}/door"
 require "#{LIB}/jsonserver"
 require "#{LIB}/sslauthserver"
 require "#{LIB}/secretstore"
@@ -18,71 +18,12 @@ LOG.level = SentryConfig::Daemon::LOG_LEVEL
 
 $DEBUG = true
 
-class Door
-  def initialize()
-    @SIGNAL_DURATION = 0.5
-    @LOCKING_TIMEOUT = 2
-    @lock = GPIO.new(SentryConfig::GPIO::LOCK, :low)
-    @unlock = GPIO.new(SentryConfig::GPIO::UNLOCK, :low)
-    @locked = GPIO.new(SentryConfig::GPIO::LOCKED, :in, :both)
-    @unlocked = GPIO.new(SentryConfig::GPIO::UNLOCKED, :in, :both)
-    @opened = GPIO.new(SentryConfig::GPIO::OPENED, :in, :both)
-    @poller = GPIOPoller.new([@opened, @locked, @unlocked])
-    @mutex = Mutex.new
-    @was_locked = nil
-  end
-  def lock()
-    @mutex.synchronize do
-      @lock.set; sleep @SIGNAL_DURATION; @lock.clear
-    end
-  end
-  def unlock()
-    @mutex.synchronize do
-      @unlock.set; sleep @SIGNAL_DURATION; @unlock.clear
-    end
-  end
-  def locked?()
-    if @locked.value && !@unlocked.value
-      return true
-    elsif !@locked.value && @unlocked.value
-      return false
-    else
-      return nil
-    end
-  end
-  def opened?()
-    return @opened.value
-  end
-  def monitor()
-    @poller.run() do |gpio, value|
-      case gpio
-      when @opened
-        yield :opened, value
-      when @locked, @unlocked
-        is_locked = self.locked?
-        if is_locked == nil
-          @poller.timeout = @LOCKING_TIMEOUT
-        else
-          changed = (is_locked != @was_locked)
-          @was_locked = is_locked
-          @poller.timeout = nil
-          yield :locked, is_locked if changed
-        end
-      when nil
-        @poller.timeout = nil
-        @was_locked = nil
-        yield :locked, nil
-      end
-    end
-  end
-end
-
 class SentryServer
   attr_reader :door
-  def initialize(json_server)
+  def initialize(door, json_server)
+    @door = door
     @json_server = json_server
     @log = @json_server.log
-    @door = Door.new
     @subscribers = []
     @mutex = Mutex.new
   end
@@ -175,6 +116,16 @@ class SentryClient
   end
 end
 
+def door()
+  return Door.new(
+    lock: SentryConfig::GPIO::LOCK,
+    unlock: SentryConfig::GPIO::UNLOCK,
+    locked: SentryConfig::GPIO::LOCKED,
+    unlocked: SentryConfig::GPIO::UNLOCKED,
+    opened: SentryConfig::GPIO::OPENED
+  )
+end
+
 def clients_certs()
   certs = []
   Dir.glob(File.join(SentryConfig::Daemon::CLIENTS, "*.#{CERT_EXT}")).each do |filename|
@@ -240,7 +191,7 @@ def cmd_server()
     File.read(SentryConfig::Daemon::KEY),
     clients_certs)
   json_server = JSONServer.new(ssl_auth_server, LOG)
-  sentry_server = SentryServer.new(json_server)
+  sentry_server = SentryServer.new(door, json_server)
   sentry_server.run
 end
 
