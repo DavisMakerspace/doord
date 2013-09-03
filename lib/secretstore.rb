@@ -5,7 +5,7 @@ require 'base64'
 class SecretStore
   READ_ONLY = true
   def initialize(path)
-    @store = YAML::Store.new path
+    @store = YAML::Store.new path, true  # Be thread safe; though perhaps more cleanly handled if done by methods that use it...
   end
   def add(id, data=nil)
     @store.transaction do
