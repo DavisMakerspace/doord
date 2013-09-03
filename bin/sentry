@@ -13,8 +13,8 @@ module SentryConfig
   module_eval File.read CONFIG
 end
 CERT_EXT = 'pem'
-LOG = Logger.new(SentryConfig::Daemon::LOG)
-LOG.level = SentryConfig::Daemon::LOG_LEVEL
+$LOG = Logger.new(SentryConfig::Daemon::LOG)
+$LOG.level = SentryConfig::Daemon::LOG_LEVEL
 
 $DEBUG = true
 
@@ -23,7 +23,6 @@ class SentryServer
   def initialize(door, json_server)
     @door = door
     @json_server = json_server
-    @log = @json_server.log
     @subscribers = []
     @mutex = Mutex.new
   end
@@ -47,7 +46,7 @@ class SentryServer
   def monitor()
     @door.monitor() do |type, value|
       msg = {type => value}
-      @log.info { "#{type} #{value.inspect}" }
+      $LOG.info { "#{type} #{value.inspect}" }
       @mutex.synchronize do
         @subscribers.each { |c| c.send msg }
       end
@@ -63,7 +62,7 @@ class SentryClient
     @id = @ids ? @ids[0] : nil
     @secrets = SecretStore.new SentryConfig::Daemon::SECRETS
     @user = nil
-    LOG.info { "#{@id} has connected" }
+    $LOG.info { "#{@id} has connected" }
   end
   def run()
     send({banner: "Welcome client #{@id}"})
@@ -109,7 +108,7 @@ class SentryClient
       end
     end
     @server.unsubscribe self
-    LOG.info { "#{@id} has disconnected" }
+    $LOG.info { "#{@id} has disconnected" }
   end
   def send(msg)
     @json_client.send msg
@@ -190,7 +189,7 @@ def cmd_server()
     File.read(SentryConfig::Daemon::CERT),
     File.read(SentryConfig::Daemon::KEY),
     clients_certs)
-  json_server = JSONServer.new(ssl_auth_server, LOG)
+  json_server = JSONServer.new(ssl_auth_server)
   sentry_server = SentryServer.new(door, json_server)
   sentry_server.run
 end
