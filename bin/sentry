@@ -95,7 +95,7 @@ def cmd_server()
     clients_certs)
   json_server = JSONServer.new(ssl_auth_server)
   secrets = SecretStore.new SentryConfig::Daemon::SECRETS
-  sentry_server = SentryServer.new(door, json_server, secrets)
+  sentry_server = Sentry::Server.new(door, json_server, secrets)
   sentry_server.run
 end
 
