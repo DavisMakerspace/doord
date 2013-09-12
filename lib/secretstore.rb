@@ -8,8 +8,8 @@ class SecretStore
   SALT_BYTES = 16
   DISABLING_PREFIX = '!'
   def initialize(path)
-    @store = YAML::Store.new path, true  # Be thread safe; though perhaps more cleanly handled if done by methods that use it...
-    @store.ultra_safe = true
+    @store = YAML::Store.new path, true # true for thread-safe
+    @store.ultra_safe = true # protect against I/O errors
   end
   def add(id)
     @store.transaction do
@@ -26,11 +26,9 @@ class SecretStore
     return true
   end
   def set(id, secret)
-    salt = Base64.strict_encode64 OpenSSL::Random.random_bytes(SALT_BYTES)
     @store.transaction() do
       return false if !@store.root?(id)
-      @store[id][:key] = make_key(secret, salt)
-      @store[id][:salt] = salt
+      @store[id][:key], @store[id][:salt] = make_key(secret)
     end
     return true
   end
@@ -60,15 +58,21 @@ class SecretStore
     @store.transaction(true) do
       entry = @store[id] if @store.root?(id)
     end
-    return entry ? (entry[:key] == make_key(secret, entry[:salt])) : false
+    return entry ? (entry[:key] == make_key(secret, entry[:salt])[0]) : false
   end
   def exists?(id)
     @store.transaction(true) do
       return @store.root?(id)
     end
   end
-  def make_key(secret, salt)
+  def make_key(secret, salt=nil)
+    if salt
+      salt = Base64.strict_decode64 salt
+    else
+      salt = OpenSSL::Random.random_bytes SALT_BYTES
+    end
     digest = DIGEST.new
-    return Base64.strict_encode64 OpenSSL::PKCS5.pbkdf2_hmac(secret, Base64.strict_decode64(salt), CRYPT_ITER, digest.digest_length, digest)
+    key = OpenSSL::PKCS5.pbkdf2_hmac(secret, salt, CRYPT_ITER, digest.digest_length, digest)
+    return [key,salt].map(){|v| Base64.strict_encode64 v}
   end
 end
