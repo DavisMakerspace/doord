@@ -8,6 +8,7 @@ class SecretStore
   DISABLING_PREFIX = '!'
   def initialize(path)
     @store = YAML::Store.new path, true  # Be thread safe; though perhaps more cleanly handled if done by methods that use it...
+    @store.ultra_safe = true
   end
   def add(id)
     @store.transaction do
