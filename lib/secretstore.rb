@@ -1,5 +1,6 @@
 require 'yaml/store'
 require 'openssl'
+require 'base64'
 
 class SecretStore
   CRYPT_ITER = 20000
@@ -25,7 +26,7 @@ class SecretStore
     return true
   end
   def set(id, secret)
-    salt = OpenSSL::Random.random_bytes(SALT_BYTES)
+    salt = Base64.strict_encode64 OpenSSL::Random.random_bytes(SALT_BYTES)
     @store.transaction() do
       return false if !@store.root?(id)
       @store[id][:key] = make_key(secret, salt)
@@ -68,6 +69,6 @@ class SecretStore
   end
   def make_key(secret, salt)
     digest = DIGEST.new
-    return OpenSSL::PKCS5.pbkdf2_hmac(secret, salt, CRYPT_ITER, digest.digest_length, digest)
+    return Base64.strict_encode64 OpenSSL::PKCS5.pbkdf2_hmac(secret, Base64.strict_decode64(salt), CRYPT_ITER, digest.digest_length, digest)
   end
 end
