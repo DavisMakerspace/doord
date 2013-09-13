@@ -65,12 +65,8 @@ class SecretStore
       return @store.root?(id)
     end
   end
-  def make_key(secret, salt=nil)
-    if salt
-      salt = Base64.strict_decode64 salt
-    else
-      salt = OpenSSL::Random.random_bytes SALT_BYTES
-    end
+  def make_key(secret, salt64=nil)
+    salt = salt64==nil ? OpenSSL::Random.random_bytes(SALT_BYTES) : Base64.strict_decode64(salt64)
     digest = DIGEST.new
     key = OpenSSL::PKCS5.pbkdf2_hmac(secret, salt, CRYPT_ITER, digest.digest_length, digest)
     return [key,salt].map(){|v| Base64.strict_encode64 v}
