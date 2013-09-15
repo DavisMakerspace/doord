@@ -51,7 +51,7 @@ module SentryCommands
     client = ARGV.shift
     user = ARGV.shift
     if !client || !user
-      STDERR.puts "Usage: #{$0} user-add <client> <user>"
+      STDERR.puts "Usage: #{$0} useradd <client> <user>"
       exit 1
     end
     id = {client: client, user: user}
@@ -68,7 +68,7 @@ module SentryCommands
     client = ARGV.shift
     user = ARGV.shift
     if !client || !user
-      STDERR.puts "Usage: #{$0} user-rm <client> <user>"
+      STDERR.puts "Usage: #{$0} userdel <client> <user>"
       exit 1
     end
     secrets = SecretStore.new SentryConfig::Daemon::SECRETS
