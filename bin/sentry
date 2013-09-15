@@ -40,14 +40,28 @@ end
 module SentryCommands
   extend self
 
-  def clientls()
+  def clientadd(desc=false)
+    return "Add a client" if desc
+  end
+
+  def clientls(desc=false)
+    return "List clients" if desc
     clients_certs.each do |cert|
       x509 = OpenSSL::X509::Certificate.new cert
       x509.uids.each { |uid| puts uid }
     end
   end
 
-  def useradd()
+  def clientlock(desc=false)
+    return "Lock a client" if desc
+  end
+
+  def clientdel(desc=false)
+    return "Remove a client" if desc
+  end
+
+  def useradd(desc=false)
+    return "Add a user" if desc
     client = ARGV.shift
     user = ARGV.shift
     if !client || !user
@@ -64,7 +78,16 @@ module SentryCommands
     puts "Added #{user} for client #{client}"
   end
 
-  def userdel()
+  def userls(desc=false)
+    return "List users" if desc
+  end
+
+  def userlock(desc=false)
+    return "Lock a user" if desc
+  end
+
+  def userdel(desc=false)
+    return "Remove a user" if desc
     client = ARGV.shift
     user = ARGV.shift
     if !client || !user
@@ -86,7 +109,24 @@ module SentryCommands
     end
   end
 
-  def server()
+  def linkadd(desc=false)
+    return "Link a user to a client" if desc
+  end
+
+  def linkdel(desc=false)
+    return "Unlink a user from a client" if desc
+  end
+
+  def control(desc=false)
+    return "Control the door directly" if desc
+  end
+
+  def query(desc=false)
+    return "Query the door directly" if desc
+  end
+
+  def server(desc=false)
+    return "Start the sentry server" if desc
     socket_server = TCPServer.new(SentryConfig::Daemon::PORT)
     ssl_auth_server = SSLAuthServer.new(
       socket_server,
@@ -105,9 +145,9 @@ if command && SentryCommands.respond_to?(command)
   SentryCommands.send command
 else
   STDERR.puts "Usage: #{$0} <command> ..."
-  STDERR.puts "  clientls  List all clients"
-  STDERR.puts "  useradd   Add a user to a client"
-  STDERR.puts "  userdel   Remove a user from a client"
-  STDERR.puts "  server    Start the sentry server"
-  exit 1
+  commands = SentryCommands.singleton_methods.map { |c| {name: c.to_s, desc: SentryCommands.send(c, true)} }
+  cmdcolwidth = commands.max_by { |c| c[:name].length }[:name].length
+  commands.each do |cmd|
+    STDERR.puts "  #{cmd[:name].ljust cmdcolwidth}  #{cmd[:desc]}"
+  end
 end
