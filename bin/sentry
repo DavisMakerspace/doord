@@ -37,82 +37,77 @@ def clients_certs()
   return certs
 end
 
-def cmd_list_clients()
-  clients_certs.each do |cert|
-    x509 = OpenSSL::X509::Certificate.new cert
-    x509.uids.each { |uid| puts uid }
+module SentryCommands
+  extend self
+
+  def clientls()
+    clients_certs.each do |cert|
+      x509 = OpenSSL::X509::Certificate.new cert
+      x509.uids.each { |uid| puts uid }
+    end
+  end
+
+  def useradd()
+    client = ARGV.shift
+    user = ARGV.shift
+    if !client || !user
+      STDERR.puts "Usage: #{$0} user-add <client> <user>"
+      exit 1
+    end
+    id = {client: client, user: user}
+    secrets = SecretStore.new SentryConfig::Daemon::SECRETS
+    if secrets.exists? id
+      STDERR.puts "User #{user} for client #{client} already exists"
+      exit 2
+    end
+    secrets.add id
+    puts "Added #{user} for client #{client}"
+  end
+
+  def userdel()
+    client = ARGV.shift
+    user = ARGV.shift
+    if !client || !user
+      STDERR.puts "Usage: #{$0} user-rm <client> <user>"
+      exit 1
+    end
+    secrets = SecretStore.new SentryConfig::Daemon::SECRETS
+    id = {client: client, user: user}
+    if !secrets.exists? id
+      STDERR.puts "User #{user} for client #{client} does not exist"
+      exit 2
+    end
+    success = secrets.remove id
+    if success
+      puts "Removed #{user} from client #{client}"
+    else
+      STDERR.puts "Removal failed"
+      exit 3
+    end
+  end
+
+  def server()
+    socket_server = TCPServer.new(SentryConfig::Daemon::PORT)
+    ssl_auth_server = SSLAuthServer.new(
+      socket_server,
+      File.read(SentryConfig::Daemon::CERT),
+      File.read(SentryConfig::Daemon::KEY),
+      clients_certs)
+    json_server = JSONServer.new(ssl_auth_server)
+    secrets = SecretStore.new SentryConfig::Daemon::SECRETS
+    sentry_server = Sentry::Server.new(door, json_server, secrets)
+    sentry_server.run
   end
 end
 
-def cmd_user_add()
-  client = ARGV.shift
-  user = ARGV.shift
-  name = ARGV.shift
-  email = ARGV.shift
-  if !client || !user || !name || !email
-    STDERR.puts "Usage: #{$0} user-add <client> <user> <name> <email>"
-    exit 1
-  end
-  id = {client: client, user: user}
-  secrets = SecretStore.new SentryConfig::Daemon::SECRETS
-  if secrets.exists? id
-    STDERR.puts "User #{user} for client #{client} already exists"
-    exit 2
-  end
-  data = {name: name, email: email}
-  secrets.add id, data
-  puts "Added #{user} #{name.inspect} <#{email}> for client #{client}"
-end
-
-def cmd_user_rm()
-  client = ARGV.shift
-  user = ARGV.shift
-  if !client || !user
-    STDERR.puts "Usage: #{$0} user-rm <client> <user>"
-    exit 1
-  end
-  secrets = SecretStore.new SentryConfig::Daemon::SECRETS
-  id = {client: client, user: user}
-  if !secrets.exists? id
-    STDERR.puts "User #{user} for client #{client} does not exist"
-    exit 2
-  end
-  success = secrets.remove id
-  if success
-    puts "Removed #{user} from client #{client}"
-  else
-    STDERR.puts "Removal failed"
-    exit 3
-  end
-end
-
-def cmd_server()
-  socket_server = TCPServer.new(SentryConfig::Daemon::PORT)
-  ssl_auth_server = SSLAuthServer.new(
-    socket_server,
-    File.read(SentryConfig::Daemon::CERT),
-    File.read(SentryConfig::Daemon::KEY),
-    clients_certs)
-  json_server = JSONServer.new(ssl_auth_server)
-  secrets = SecretStore.new SentryConfig::Daemon::SECRETS
-  sentry_server = Sentry::Server.new(door, json_server, secrets)
-  sentry_server.run
-end
-
-cmd = ARGV.shift
-case cmd
-when "list-clients"
-  cmd_list_clients
-when "user-add"
-  cmd_user_add
-when "user_rm"
-  cmd_user_rm
-when "server"
-  cmd_server
+command = ARGV.shift
+if command && SentryCommands.respond_to?(command)
+  SentryCommands.send command
 else
   STDERR.puts "Usage: #{$0} <command> ..."
-  STDERR.puts "  user-add  Add a user to a client"
-  STDERR.puts "  user-rm   Remove a user from a client"
+  STDERR.puts "  clientls  List all clients"
+  STDERR.puts "  useradd   Add a user to a client"
+  STDERR.puts "  userdel   Remove a user from a client"
   STDERR.puts "  server    Start the sentry server"
   exit 1
 end
