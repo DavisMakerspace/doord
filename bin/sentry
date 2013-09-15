@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 
 CONFIG = '/etc/sentry/config'
-LIB = File.realpath '../lib', File.dirname(__FILE__)
+LIB = '/usr/lib/sentry'
 
 require 'logger'
 require "#{LIB}/door"
