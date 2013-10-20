@@ -1,0 +1,9 @@
+[Unit]
+Description=Sentry Door Daemon
+
+[Service]
+ExecStart=/usr/bin/sentry server
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
