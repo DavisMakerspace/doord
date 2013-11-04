@@ -12,15 +12,27 @@ class Door
     @poller = GPIOPoller.new([@opened, @locked, @unlocked])
     @mutex = Mutex.new
     @was_locked = nil
+    @lock.clear
+    @unlock.clear
   end
   def lock()
     @mutex.synchronize do
-      @lock.set; sleep @SIGNAL_DURATION; @lock.clear
+      begin
+        @lock.set
+        sleep @SIGNAL_DURATION
+      ensure
+        @lock.clear
+      end
     end
   end
   def unlock()
     @mutex.synchronize do
-      @unlock.set; sleep @SIGNAL_DURATION; @unlock.clear
+      begin
+        @unlock.set
+        sleep @SIGNAL_DURATION
+      ensure
+        @unlock.clear
+      end
     end
   end
   def locked?()
