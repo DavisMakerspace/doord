@@ -62,7 +62,7 @@ class Door
           @poller.timeout = nil
           yield :locked, is_locked if changed
         end
-      when nil
+      when :timeout
         @poller.timeout = nil
         @was_locked = nil
         yield :locked, nil
