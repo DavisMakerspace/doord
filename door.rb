@@ -10,7 +10,7 @@ class Door
     @opened = GPIO.new(opened, :in, :both)
     @poller = GPIOPoller.new([@opened, @locked, @unlocked])
     @mutex = Mutex.new
-    @was_locked = nil
+    @last_msg = nil
     @lock.clear
     @unlock.clear
   end
@@ -50,10 +50,16 @@ class Door
     @poller.run() do |gpio, value|
       case gpio
       when @opened
-        yield :opened, value
+        msg = [:opened, value]
       when @locked, @unlocked
-        yield :locked, locked?
+        msg = [:locked, locked?]
       end
+      yield msg if msg && debounce(msg)
     end
+  end
+  def debounce msg
+    changed = (msg != @last_msg)
+    @last_msg = msg
+    return changed
   end
 end
