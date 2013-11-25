@@ -1,0 +1,15 @@
+#!/bin/bash
+
+BINDIR=usr/bin
+ETCDIR=etc
+LIBDIR=usr/lib/doord
+SYSTEMD=usr/lib/systemd/system
+
+for x in BINDIR ETCDIR LIBDIR SYSTEMD; do
+  install -d "$DESTDIR/${!x}"
+done
+SRCDIR=$(dirname "$0")
+install -m644 "$SRCDIR/doord.conf" "$DESTDIR/$ETCDIR/doord.conf"
+install -m644 -t "$DESTDIR/$LIBDIR" "$SRCDIR/"*.rb
+install -m755 "$SRCDIR/doord" "$DESTDIR/$BINDIR/doord"
+install -m644 "$SRCDIR/doord.service" "$DESTDIR/$SYSTEMD/doord.service"

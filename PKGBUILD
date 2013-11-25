@@ -1,20 +1,20 @@
-pkgname=sentry-git
-_pkgname=sentry
-pkgver=$(git --git-dir="$startdir/.."/.git describe --dirty=-modded | sed 's/-/_/g')
+pkgname=doord-git
+_pkgname=doord
+pkgver=$(git --git-dir="$startdir"/.git describe --dirty=-modded | sed 's/-/_/g')
 pkgrel=1
-pkgdesc='Simple authentication and monitoring of door'
+pkgdesc='Simple daemon to monitor and control door via GPIO'
 url="http://github.com/DavisMakerspace/$_pkgname"
 arch=(any)
 license=(unknown)
 depends=(ruby)
 makedepends=()
 provides=($_pkgname)
-backup=(etc/$_pkgname/config etc/$_pkgname/secrets)
+backup=(etc/$_pkgname.conf)
 source=()
 md5sums=()
 
 prepare() {
-  cd "$startdir/.."
+  cd "$startdir"
   git checkout-index -a -f --prefix="$srcdir/"
 }
 
@@ -28,5 +28,5 @@ check() {
 
 package() {
   cd "$srcdir"
-  DESTDIR=$pkgdir install/install
+  DESTDIR=$pkgdir ./install
 }

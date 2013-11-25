@@ -1,0 +1,72 @@
+#!/usr/bin/env ruby
+
+require 'logger'
+require 'etc'
+require 'socket'
+require 'fileutils'
+require '/usr/lib/doord/door'
+
+module DoorDConfig
+  module_eval File.read '/etc/doord.conf'
+end
+
+LOG = Logger.new DoorDConfig::General::LOG
+LOG.level = DoorDConfig::General::LOG_LEVEL
+
+class DoorD
+  def initialize()
+    @door = Door.new(
+      lock: DoorDConfig::GPIO::LOCK,
+      unlock: DoorDConfig::GPIO::UNLOCK,
+      locked: DoorDConfig::GPIO::LOCKED,
+      unlocked: DoorDConfig::GPIO::UNLOCKED,
+      opened: DoorDConfig::GPIO::OPENED
+    )
+    FileUtils.mkdir_p(File.dirname(DoorDConfig::General::DOOR_SOCKET))
+    @server = UNIXServer.new(DoorDConfig::General::DOOR_SOCKET)
+    if Process.euid == 0
+      uid = Etc.getpwnam(DoorDConfig::General::UID).uid
+      gid = Etc.getgrnam(DoorDConfig::General::GID).gid
+      File.chown(uid, gid, DoorDConfig::General::DOOR_SOCKET)
+      File.chmod(0660, DoorDConfig::General::DOOR_SOCKET)
+      Process::GID.change_privilege gid
+      Process::UID.change_privilege uid
+    end
+    @clients = []
+    @mutex = Mutex.new
+  end
+  def run
+    Thread.new { monitor }
+    while true
+      client = @server.accept
+      Thread.new { listen client }
+    end
+  end
+  def monitor
+    @door.monitor do |type, value|
+      @mutex.synchronize { @clients.each { |c| c.puts "! #{type}=#{value}" } }
+    end
+  end
+  def listen client
+    LOG.info "Client #{client} connected"
+    @mutex.synchronize { @clients << client }
+    client.each do |cmd|
+      case cmd.chomp
+      when 'lock' then @door.lock
+      when 'unlock' then @door.unlock
+      when 'status' then tell_status client
+      else tell_help client
+      end
+    end
+    @mutex.synchronize { @clients.delete client }
+    LOG.info "Client #{client} disconnected"
+  end
+  def tell_status client
+    client.puts ": opened=#{@door.opened?} locked=#{@door.locked?}"
+  end
+  def tell_help client
+    client.puts "? lock unlock status"
+  end
+end
+
+DoorD.new.run

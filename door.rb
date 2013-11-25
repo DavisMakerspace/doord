@@ -1,4 +1,4 @@
-require "#{LIB}/gpio"
+require '/usr/lib/doord/gpio'
 
 class Door
   def initialize(lock: nil, unlock: nil, locked: nil, unlocked: nil, opened: nil)

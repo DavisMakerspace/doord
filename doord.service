@@ -1,8 +1,8 @@
 [Unit]
-Description=Sentry Door Daemon
+Description=Door Daemon
 
 [Service]
-ExecStart=/usr/bin/sentry server
+ExecStart=/usr/bin/doord
 Restart=always
 
 [Install]
