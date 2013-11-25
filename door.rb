@@ -3,7 +3,6 @@ require '/usr/lib/doord/gpio'
 class Door
   def initialize(lock: nil, unlock: nil, locked: nil, unlocked: nil, opened: nil)
     @SIGNAL_DURATION = 0.5
-    @LOCKING_TIMEOUT = 2
     @lock = GPIO.new(lock, :low)
     @unlock = GPIO.new(unlock, :low)
     @locked = GPIO.new(locked, :in, :both)
@@ -53,19 +52,7 @@ class Door
       when @opened
         yield :opened, value
       when @locked, @unlocked
-        is_locked = self.locked?
-        if is_locked == nil
-          @poller.timeout = @LOCKING_TIMEOUT
-        else
-          changed = (is_locked != @was_locked)
-          @was_locked = is_locked
-          @poller.timeout = nil
-          yield :locked, is_locked if changed
-        end
-      when :timeout
-        @poller.timeout = nil
-        @was_locked = nil
-        yield :locked, nil
+        yield :locked, locked?
       end
     end
   end
