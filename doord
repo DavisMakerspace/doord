@@ -1,72 +1,49 @@
 #!/usr/bin/env ruby
 
 require 'logger'
-require 'etc'
 require 'socket'
+require 'etc'
 require 'fileutils'
-require '/usr/lib/doord/door'
+require_relative 'door'
+require_relative 'doord'
+if !ENV['DOORD_FAKEGPIO']
+  require_relative 'gpio/gpio'
+else
+  require_relative 'gpio/fakegpio'
+  GPIO = FakeGPIO
+end
 
 module DoorDConfig
-  module_eval File.read '/etc/doord.conf'
+  module_eval File.read "#{File.dirname __FILE__}/doord.conf"
 end
 
-LOG = Logger.new DoorDConfig::General::LOG
-LOG.level = DoorDConfig::General::LOG_LEVEL
+GPIOS = [:LOCK,:UNLOCK,:LOCKED,:UNLOCKED,:OPENED].map{|n|GPIO.new(DoorDConfig::GPIO.const_get(n))}
 
-class DoorD
-  def initialize()
-    @door = Door.new(
-      lock: DoorDConfig::GPIO::LOCK,
-      unlock: DoorDConfig::GPIO::UNLOCK,
-      locked: DoorDConfig::GPIO::LOCKED,
-      unlocked: DoorDConfig::GPIO::UNLOCKED,
-      opened: DoorDConfig::GPIO::OPENED
-    )
-    FileUtils.mkdir_p(File.dirname(DoorDConfig::General::DOOR_SOCKET))
-    @server = UNIXServer.new(DoorDConfig::General::DOOR_SOCKET)
-    if Process.euid == 0
-      uid = Etc.getpwnam(DoorDConfig::General::UID).uid
-      gid = Etc.getgrnam(DoorDConfig::General::GID).gid
-      File.chown(uid, gid, DoorDConfig::General::DOOR_SOCKET)
-      File.chmod(0660, DoorDConfig::General::DOOR_SOCKET)
-      Process::GID.change_privilege gid
-      Process::UID.change_privilege uid
-    end
-    @clients = []
-    @mutex = Mutex.new
-  end
-  def run
-    Thread.new { monitor }
-    while true
-      client = @server.accept
-      Thread.new { listen client }
-    end
-  end
-  def monitor
-    @door.monitor do |type, value|
-      @mutex.synchronize { @clients.each { |c| c.puts "! #{type}=#{value}" } }
-    end
-  end
-  def listen client
-    LOG.info "Client #{client} connected"
-    @mutex.synchronize { @clients << client }
-    client.each do |cmd|
-      case cmd.chomp
-      when 'lock' then @door.lock
-      when 'unlock' then @door.unlock
-      when 'status' then tell_status client
-      else tell_help client
+case ARGV[0]
+  when "export"
+    GPIOS.each do |gpio|
+      gpio.export if !gpio.exported?
+      if !ENV['DOORD_FAKEGPIO']
+        uid = Etc.getpwnam(DoorDConfig::General::UID).uid
+        gid = Etc.getgrnam(DoorDConfig::General::GID).gid
+        gpio.chown uid, gid
+        gpio.chmod DoorDConfig::General::MODE
       end
     end
-    @mutex.synchronize { @clients.delete client }
-    LOG.info "Client #{client} disconnected"
-  end
-  def tell_status client
-    client.puts ": opened=#{@door.opened?} locked=#{@door.locked?}"
-  end
-  def tell_help client
-    client.puts "? lock unlock status"
-  end
+    FileUtils.mkdir_p File.dirname DoorDConfig::General::DOOR_SOCKET
+  when "run"
+    begin
+      door = Door.new *GPIOS
+      server = UNIXServer.new DoorDConfig::General::DOOR_SOCKET
+      log = Logger.new DoorDConfig::General::LOG
+      log.level = DoorDConfig::General::LOG_LEVEL
+      DoorD.new(door, server, log).run
+    ensure
+      File.unlink DoorDConfig::General::DOOR_SOCKET if server
+    end
+  when "unexport"
+    GPIOS.each{|gpio| gpio.unexport if gpio.exported?}
+  else
+    puts "Usage: #{$0} < export | run | unexport >"
+    exit 1
 end
-
-DoorD.new.run

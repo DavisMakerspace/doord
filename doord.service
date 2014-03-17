@@ -1,8 +1,12 @@
 [Unit]
 Description=Door Daemon
+Requires=doord-export.service
+After=doord-export.service
 
 [Service]
-ExecStart=/usr/bin/doord
+User=doord
+Group=doord
+ExecStart=/srv/doord/doord run
 Restart=always
 
 [Install]

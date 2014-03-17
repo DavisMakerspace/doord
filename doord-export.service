@@ -1,0 +1,8 @@
+[Unit]
+Description=Door Daemon GPIO Setup
+
+[Service]
+Type=oneshot
+ExecStart=/srv/doord/doord export
+ExecStop=/srv/doord/doord unexport
+RemainAfterExit=yes

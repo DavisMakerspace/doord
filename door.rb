@@ -1,65 +1,53 @@
-require '/usr/lib/doord/gpio'
-
 class Door
-  def initialize(lock: nil, unlock: nil, locked: nil, unlocked: nil, opened: nil)
-    @SIGNAL_DURATION = 0.5
-    @lock = GPIO.new(lock, :low)
-    @unlock = GPIO.new(unlock, :low)
-    @locked = GPIO.new(locked, :in, :both)
-    @unlocked = GPIO.new(unlocked, :in, :both)
-    @opened = GPIO.new(opened, :in, :both)
-    @poller = GPIOPoller.new([@opened, @locked, @unlocked])
-    @mutex = Mutex.new
-    @last_msg = nil
-    @lock.clear
-    @unlock.clear
+  SIGNAL_DURATION = 0.5
+  def initialize(lock, unlock, locked, unlocked, opened)
+    @lock = lock
+    @unlock = unlock
+    @locked = locked
+    @unlocked = unlocked
+    @opened = opened
+    [@lock,@unlock].each{|g|g.set_output_low}
+    [@locked,@unlocked,@opened].each{|g|g.set_input.set_edge_both}
   end
-  def lock()
-    @mutex.synchronize do
-      begin
-        @lock.set
-        sleep @SIGNAL_DURATION
-      ensure
-        @lock.clear
-      end
+  def lock
+    begin
+      @lock.set_high
+      sleep SIGNAL_DURATION
+    ensure
+      @lock.set_low
     end
   end
-  def unlock()
-    @mutex.synchronize do
-      begin
-        @unlock.set
-        sleep @SIGNAL_DURATION
-      ensure
-        @unlock.clear
-      end
+  def unlock
+    begin
+      @unlock.set_high
+      sleep SIGNAL_DURATION
+    ensure
+      @unlock.set_low
     end
   end
-  def locked?()
-    if @locked.value && !@unlocked.value
+  def locked?
+    if @locked.high? && @unlocked.low?
       return true
-    elsif !@locked.value && @unlocked.value
+    elsif @locked.low? && @unlocked.high?
       return false
     else
       return nil
     end
   end
-  def opened?()
-    return @opened.value
+  def opened?
+    return @opened.high?
   end
-  def monitor()
-    @poller.run() do |gpio, value|
-      case gpio
-      when @opened
-        msg = [:opened, value]
-      when @locked, @unlocked
-        msg = [:locked, locked?]
+  def monitor
+    last_msg = nil
+    loop do
+      @lock.class.select([@opened, @locked, @unlocked]).each do |gpio|
+        msg = case gpio
+          when @opened then [:opened, opened?]
+          when @locked, @unlocked then [:locked, locked?]
+        end
+        yield msg if msg != last_msg
+        last_msg = msg
       end
-      yield msg if msg && debounce(msg)
     end
-  end
-  def debounce msg
-    changed = (msg != @last_msg)
-    @last_msg = msg
-    return changed
   end
 end

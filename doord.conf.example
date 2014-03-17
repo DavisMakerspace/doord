@@ -1,9 +1,10 @@
 module General
   UID = 'sentry'
   GID = 'sentry'
+  MODE = 0660
   LOG = STDERR
   LOG_LEVEL = Logger::DEBUG
-  DOOR_SOCKET = '/run/doord.sock'
+  DOOR_SOCKET = 'doord.sock'
 end
 module GPIO
   LOCK = 31

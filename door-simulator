@@ -1,0 +1,47 @@
+#!/usr/bin/env ruby
+
+require 'logger'
+require_relative 'gpio/fakegpio'
+
+module DoorDConfig
+  module_eval File.read "#{File.dirname __FILE__}/doord.conf"
+end
+
+gpios = Hash[ [:lock,:unlock,:locked,:unlocked,:opened].map{|n|[n,FakeGPIO.new(DoorDConfig::GPIO.const_get(n.upcase))]} ]
+
+gpios[:lock].set_edge_both
+gpios[:unlock].set_edge_both
+gpios[:locked].set_high
+gpios[:unlocked].set_low
+gpios[:opened].set_low
+
+loop do
+  gpios[:lock].low?
+  gpios[:unlock].low?
+  signals = FakeGPIO.select([gpios[:lock],gpios[:unlock]], timeout:3)
+  if signals
+    signals.each do |signal|
+      case signal
+        when gpios[:lock]
+          puts 'Got lock signal'
+          5.times do
+            gpios[:unlocked].set_low
+            sleep 0.2
+            gpios[:locked].set_high
+            sleep 0.2
+          end
+        when gpios[:unlock]
+          puts 'Got unlock signal'
+          5.times do
+            gpios[:locked].set_low
+            sleep 0.2
+            gpios[:unlocked].set_high
+            sleep 0.2
+          end
+      end
+    end
+  else
+    puts "Toggling door opened state"
+    gpios[:opened].set_high !gpios[:opened].high?
+  end
+end
