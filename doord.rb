@@ -25,11 +25,20 @@ class DoorD
     @mutex.synchronize { @clients << client }
     client.each do |cmd|
       case cmd.chomp
-        when 'lock'; Thread.new{ @mutex.synchronize{ @door.lock }}.abort_on_exception=true
-        when 'unlock'; Thread.new{ @mutex.synchronize{ @door.unlock }}.abort_on_exception=true
-        when 'opened'; @mutex.synchronize{ client.puts ": opened #{@door.opened?.inspect}" }
-        when 'locked'; @mutex.synchronize{ client.puts ": locked #{@door.locked?.inspect}" }
-        else @mutex.synchronize{ client.puts "? lock unlock opened locked" }
+        when 'lock'
+          @log.info "Client #{client} sending lock signal"
+          Thread.new{ @mutex.synchronize{ @door.lock }}.abort_on_exception=true
+        when 'unlock'
+          @log.info "Client #{client} sending unlock signal"
+          Thread.new{ @mutex.synchronize{ @door.unlock }}.abort_on_exception=true
+        when 'opened'
+          @log.info "Client #{client} queried opened"
+          @mutex.synchronize{ client.puts ": opened #{@door.opened?.inspect}" }
+        when 'locked'
+          @log.info "Client #{client} queried locked"
+          @mutex.synchronize{ client.puts ": locked #{@door.locked?.inspect}" }
+        else
+          @mutex.synchronize{ client.puts "? lock unlock opened locked" }
       end
     end
     @mutex.synchronize{ @clients.delete client }
