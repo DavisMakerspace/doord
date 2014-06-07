@@ -4,14 +4,10 @@
 
 ## Cloning and pulling from the repository
 
-This project uses a git submodule, so you may want to clone like this:
+This project uses a git submodule, so you can clone like this:
 
     git clone --recursive https://github.com/DavisMakerspace/doord.git
 
-If you don't do that, then you'll need to go into the clone and do something like this:
+And update like this:
 
-    git submodule update --init --recursive
-
-Then, for a `git pull`, you'll need make sure the submodule is up to date as well, with something like this:
-
-    git pull && git submodule update
+    git pull --recurse-submodules
