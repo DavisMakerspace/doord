@@ -13,3 +13,8 @@ module GPIO
   UNLOCKED = 60
   OPENED = 51
 end
+module Simulator
+  OPEN_TOGGLE_DELAY = 5
+  BOUNCE_COUNT = 5
+  BOUNCE_DUR = 2
+end
