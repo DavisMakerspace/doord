@@ -12,6 +12,10 @@ And update like this:
 
     git pull --recurse-submodules
 
+## Configuring
+
+Copy the `doord.conf.example` file to `doord.conf`, and change any values that need to be changed.
+
 ## Running
 
 Just run the `doord` executable in whatever matter you see fit.
