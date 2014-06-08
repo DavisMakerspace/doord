@@ -7,7 +7,7 @@ module DoorDConfig
   module_eval File.read "#{File.dirname __FILE__}/doord.conf"
 end
 
-gpios = Hash[ [:lock,:unlock,:locked,:unlocked,:opened].map{|n|[n,FakeGPIO.new(DoorDConfig::GPIO.const_get(n.upcase))]} ]
+gpios = [:lock,:unlock,:locked,:unlocked,:opened].map{|n|[n,FakeGPIO.new(DoorDConfig::GPIO.const_get(n.upcase))]}.to_h
 
 gpios[:lock].set_edge_both
 gpios[:unlock].set_edge_both
