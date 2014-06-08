@@ -41,7 +41,7 @@ loop do
       end
     end
   else
-    puts "Toggling door opened state"
     gpios[:opened].set_high !gpios[:opened].high?
+    puts "Set door to #{gpios[:opened].high? ? "opened" : "closed"}"
   end
 end
