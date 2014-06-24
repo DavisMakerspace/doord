@@ -4,7 +4,7 @@ module General
   MODE = 0660
   LOG = STDERR
   LOG_LEVEL = Logger::DEBUG
-  DOOR_SOCKET = 'doord.sock'
+  DOOR_SOCKET = 'var/doord.sock'
 end
 module GPIO
   LOCK = 31

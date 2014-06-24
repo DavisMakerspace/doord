@@ -6,7 +6,7 @@ After=doord-export.service
 [Service]
 User=doord
 Group=doord
-ExecStart=/srv/doord/doord run
+ExecStart=/PATH/TO/bin/doord run
 Restart=always
 
 [Install]

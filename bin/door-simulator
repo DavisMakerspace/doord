@@ -1,10 +1,10 @@
 #!/usr/bin/env ruby
 
 require 'logger'
-require_relative 'gpio/fakegpio'
+require_relative '../opt/gpio/fakegpio'
 
 module DoorDConfig
-  module_eval File.read "#{File.dirname __FILE__}/doord.conf"
+  module_eval File.read "#{File.dirname __FILE__}/../etc/doord.conf"
 end
 
 gpios = [:lock,:unlock,:locked,:unlocked,:opened].map{|n|[n,FakeGPIO.new(DoorDConfig::GPIO.const_get(n.upcase))]}.to_h

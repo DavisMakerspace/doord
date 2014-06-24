@@ -1,1 +1,3 @@
-doord.conf
+etc/doord.conf
+var/*
+!var/.gitkeep

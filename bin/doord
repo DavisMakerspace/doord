@@ -4,17 +4,17 @@ require 'logger'
 require 'socket'
 require 'etc'
 require 'fileutils'
-require_relative 'door'
-require_relative 'doord'
+require_relative '../lib/door'
+require_relative '../lib/doord'
 if !ENV['DOORD_FAKEGPIO']
-  require_relative 'gpio/gpio'
+  require_relative '../opt/gpio/gpio'
 else
-  require_relative 'gpio/fakegpio'
+  require_relative '../opt/gpio/fakegpio'
   GPIO = FakeGPIO
 end
 
 module DoorDConfig
-  module_eval File.read "#{File.dirname __FILE__}/doord.conf"
+  module_eval File.read "#{File.dirname __FILE__}/../etc/doord.conf"
 end
 
 GPIOS = [:LOCK,:UNLOCK,:LOCKED,:UNLOCKED,:OPENED].map{|n|GPIO.new(DoorDConfig::GPIO.const_get(n))}
