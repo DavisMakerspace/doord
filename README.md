@@ -14,18 +14,22 @@ And update like this:
 
 ## Configuring
 
-Copy the `doord.conf.example` file to `doord.conf`, and change any values that need to be changed.
+In `etc`, copy the `doord.conf.example` file to `doord.conf`, and change any values that need to be changed.
 
 ## Running
 
-Just run the `doord` executable in whatever matter you see fit.
+Just run the `bin/doord` executable in whatever matter you see fit.
+
+## Installing
+
+The provided `Makefile` has an install rule that will install systemd service definitions pointing back to this directory.
 
 ## Testing
 
 A Redis database can be used to test out the functionality without having a GPIO bus.
 
-Just run your Redis server, and set the environment variable DOORD_FAKEGPIO before running `doord`:
+Just run your Redis server, and set the environment variable DOORD_FAKEGPIO before running `bin/doord`:
 
-    DOORD_FAKEGPIO= ./doord
+    DOORD_FAKEGPIO= bin/doord
 
-To see what it would be like to have a door hooked up, you can then run `door-simulator`.
+To see what it would be like to have a door hooked up, you can then run `bin/door-simulator`.
