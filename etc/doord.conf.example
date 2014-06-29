@@ -1,6 +1,6 @@
 module General
-  UID = 'sentry'
-  GID = 'sentry'
+  UID = 'doord'
+  GID = 'doord'
   MODE = 0660
   LOG = STDERR
   LOG_LEVEL = Logger::DEBUG
