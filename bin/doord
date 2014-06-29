@@ -36,9 +36,14 @@ case ARGV[0]
       door = Door.new *GPIOS
       server = UNIXServer.new DoorDConfig::General::DOOR_SOCKET
       File.chmod DoorDConfig::General::MODE, DoorDConfig::General::DOOR_SOCKET
-      log = Logger.new DoorDConfig::General::LOG
-      log.level = DoorDConfig::General::LOG_LEVEL
-      DoorD.new(door, server, log).run
+      log = DoorDConfig::General::LOG
+      clientid = ->(client) do
+        uid, gid = client.getpeereid
+        user = Etc.getpwuid(uid).name
+        group = Etc.getgrgid(gid).name
+        "#{user}:#{group}:#{client.object_id.to_s(16)}"
+      end
+      DoorD.new(door, server, log, clientid).run
     ensure
       File.unlink DoorDConfig::General::DOOR_SOCKET if server
     end

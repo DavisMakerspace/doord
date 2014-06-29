@@ -2,8 +2,8 @@ module General
   UID = 'doord'
   GID = 'doord'
   MODE = 0660
-  LOG = STDERR
-  LOG_LEVEL = Logger::DEBUG
+  LOG = Logger.new STDERR
+  LOG.level = Logger::DEBUG
   DOOR_SOCKET = 'var/doord.sock'
 end
 module GPIO

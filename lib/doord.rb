@@ -1,8 +1,9 @@
 class DoorD
-  def initialize(door, server, log)
+  def initialize(door, server, log, clientid=->(client){client})
     @door = door
     @server = server
     @log = log
+    @clientid = clientid
     @clients = []
     @mutex = Mutex.new
   end
@@ -21,27 +22,28 @@ class DoorD
     end
   end
   def listen client
-    @log.info "Client #{client} connected"
+    clientid = @clientid.call(client)
+    @log.info "Client #{clientid} connected"
     @mutex.synchronize { @clients << client }
     client.each do |cmd|
       case cmd.chomp
         when 'lock'
-          @log.info "Client #{client} sending lock signal"
+          @log.info "Client #{clientid} sending lock signal"
           Thread.new{ @mutex.synchronize{ @door.lock }}.abort_on_exception=true
         when 'unlock'
-          @log.info "Client #{client} sending unlock signal"
+          @log.info "Client #{clientid} sending unlock signal"
           Thread.new{ @mutex.synchronize{ @door.unlock }}.abort_on_exception=true
         when 'opened'
-          @log.info "Client #{client} queried opened"
+          @log.info "Client #{clientid} queried opened"
           @mutex.synchronize{ client.puts ": opened #{@door.opened?.inspect}" }
         when 'locked'
-          @log.info "Client #{client} queried locked"
+          @log.info "Client #{clientid} queried locked"
           @mutex.synchronize{ client.puts ": locked #{@door.locked?.inspect}" }
         else
           @mutex.synchronize{ client.puts "? lock unlock opened locked" }
       end
     end
     @mutex.synchronize{ @clients.delete client }
-    @log.info "Client #{client} disconnected"
+    @log.info "Client #{clientid} disconnected"
   end
 end
