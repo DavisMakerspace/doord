@@ -35,6 +35,7 @@ case ARGV[0]
     begin
       door = Door.new *GPIOS
       server = UNIXServer.new DoorDConfig::General::DOOR_SOCKET
+      File.chmod DoorDConfig::General::MODE, DoorDConfig::General::DOOR_SOCKET
       log = Logger.new DoorDConfig::General::LOG
       log.level = DoorDConfig::General::LOG_LEVEL
       DoorD.new(door, server, log).run
