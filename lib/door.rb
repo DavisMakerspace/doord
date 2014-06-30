@@ -34,8 +34,18 @@ class Door
       return nil
     end
   end
+  def unlocked?
+    case locked?
+      when false then true
+      when true then false
+      else nil
+    end
+  end
   def opened?
     return @opened.high?
+  end
+  def closed?
+    return !opened?
   end
   def monitor
     last_msg = nil

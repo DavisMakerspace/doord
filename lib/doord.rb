@@ -39,7 +39,7 @@ class DoorD
         when 'unlock' then unlock.call
         when 'togglelock'
           @log.info "Client #{clientid} requested toggle"
-          ((!@door.locked? && !@door.opened?) ? lock : unlock).call
+          (@door.unlocked? && @door.closed? ? lock : unlock).call
         when 'opened'
           @log.info "Client #{clientid} queried opened"
           @mutex.synchronize{ client.puts ": opened #{@door.opened?.inspect}" }
