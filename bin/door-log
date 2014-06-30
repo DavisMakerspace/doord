@@ -1,0 +1,5 @@
+#!/bin/bash -e
+socket=$("$(dirname "$0")/doord" socket)
+socat UNIX:"$socket" STDOUT | while read -r line; do
+  echo "${line#* }"
+done

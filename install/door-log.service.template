@@ -1,0 +1,13 @@
+[Unit]
+Description=Door Logger
+Requires=doord.service
+After=doord.service
+
+[Service]
+User=doord
+Group=doord
+ExecStart=/PATH/TO/bin/door-log
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
