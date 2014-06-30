@@ -26,12 +26,10 @@ class Door
     end
   end
   def locked?
-    if @locked.high? && @unlocked.low?
-      return true
-    elsif @locked.low? && @unlocked.high?
-      return false
-    else
-      return nil
+    case
+      when @locked.high? && @unlocked.low? then true
+      when @locked.low? && @unlocked.high? then false
+      else nil
     end
   end
   def unlocked?
@@ -41,12 +39,8 @@ class Door
       else nil
     end
   end
-  def opened?
-    return @opened.high?
-  end
-  def closed?
-    return !opened?
-  end
+  def opened?; @opened.high?; end
+  def closed?; !opened?; end
   def monitor
     last_msg = nil
     loop do
