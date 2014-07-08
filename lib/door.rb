@@ -42,15 +42,15 @@ class Door
   def opened?; @opened.high?; end
   def closed?; !opened?; end
   def monitor
-    last_msg = nil
+    last_msg = {}
     loop do
       @lock.class.select([@opened, @locked, @unlocked]).each do |gpio|
         msg = case gpio
           when @opened then [:opened, opened?]
           when @locked, @unlocked then [:locked, locked?]
         end
-        yield msg if msg != last_msg
-        last_msg = msg
+        yield msg if msg[1] != last_msg[msg[0]]
+        last_msg[msg[0]] = msg[1]
       end
     end
   end
